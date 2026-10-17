@@ -37,5 +37,43 @@ E6 checks counterexamples and excluded instances.
 Connecting each formal result to a benchmark faithfulness finding
 requires separate justification.
 
-These checks have been run manually. The automated verification
-runner has not yet been implemented.
+## Python execution runner
+
+From the project root in Ubuntu/WSL:
+
+```bash
+uv sync
+uv run yamalemma fixtures/E5_audit.lean
+```
+
+The command prints JSON containing the execution status, command,
+working directory, elapsed time, exit code, stdout, and stderr.
+
+The default timeout is 180 seconds. To choose another limit:
+
+```bash
+uv run yamalemma fixtures/E5_audit.lean --timeout 30
+```
+
+Execution statuses and CLI exit codes:
+
+- success: 0
+- failure: 1
+- timeout: 124
+- launch_error: 127
+
+Run the regression tests with:
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+The tests cover successful execution, an invalid proof, timeout,
+and launch failure. The runner_invalid.lean fixture deliberately
+contains an invalid proof and is expected to fail.
+
+This runner targets Ubuntu/WSL and trusted local fixtures.
+A successful execution does not establish that the intended theorem
+was checked or that its axiom dependencies satisfy our policy.
+Those checks are not yet automated. This runner is not a security
+sandbox for untrusted Lean code.
