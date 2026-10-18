@@ -177,12 +177,12 @@ def ingest_fix_pairs(worker, manifest, directory, informal=None, answers=False):
                 continue
             rendering = render_target(worker, item, item['expected_type'])
             row[role] = {'status': 'elaborates' if rendering.get('status') == 'rendered' else 'does_not_elaborate',
-                         'expected_type': item['expected_type']}
+                         'statement': [item['expected_type']] + [[entry['type'], entry['value']] for entry in item['context']['declarations']]}
             if rendering.get('status') != 'rendered':
                 row[role]['reason'] = str(rendering.get('error') or rendering.get('status'))[:300]
-        types = [row.get(role, {}).get('expected_type') for role in ('pre_fix', 'post_fix')]
-        row['statement_changed'] = None if None in types else types[0] != types[1]
+        statements = [row.get(role, {}).get('statement') for role in ('pre_fix', 'post_fix')]
+        row['statement_changed'] = None if None in statements else statements[0] != statements[1]
         for role in ('pre_fix', 'post_fix'):
-            row.get(role, {}).pop('expected_type', None)
+            row.get(role, {}).pop('statement', None)
         rows.append(row)
     return items, rows
