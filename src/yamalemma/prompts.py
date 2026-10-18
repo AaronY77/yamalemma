@@ -110,6 +110,16 @@ def declared_edit_kind(item, candidate):
     return 'binder_move' if kind == 'rewrite' and binder_move(item, old, new) else kind
 
 
+def hypothesis_formula(hypotheses):
+    dependent = any(re.search(r'\bby\b', hypothesis['type']) or
+                    any(re.search(rf'(?<![\w.]){re.escape(name)}(?![\w])', hypothesis['type']) for earlier in hypotheses[:index] for name in earlier['names'])
+                    for index, hypothesis in enumerate(hypotheses))
+    if not dependent:
+        return ' ∧ '.join(f'({hypothesis["type"]})' for hypothesis in hypotheses)
+    binders = ' '.join(f'({" ".join(hypothesis["names"])} : {hypothesis["type"]})' for hypothesis in hypotheses)
+    return f'∃ {binders}, True'
+
+
 def hypothesis_target(item, candidate, signature):
     old, new = candidate.get('edit_from'), candidate.get('edit_to')
     if signature is None or signature.get('status') != 'found':
@@ -126,8 +136,7 @@ def hypothesis_target(item, candidate, signature):
     edited[matches[0]]['type'] = hypotheses[matches[0]]['type'].replace(old, new, 1)
     if edited[matches[0]]['type'] == hypotheses[matches[0]]['type']:
         raise ValueError('hypothesis edit does not change the hypothesis')
-    source = ' ∧ '.join(f'({hypothesis["type"]})' for hypothesis in hypotheses)
-    intended = ' ∧ '.join(f'({hypothesis["type"]})' for hypothesis in edited)
+    source, intended = hypothesis_formula(hypotheses), hypothesis_formula(edited)
     body = f'({intended}) ∧ ¬ ({source})'
     proposition = wrap(f'∃ {signature["witnesses"]}, {body}' if signature['witnesses'] else body, item['context']['opens'])
     edit = {'from': old, 'to': new, 'hypothesis': hypotheses[matches[0]]['names'], 'source_hypotheses': source,
@@ -156,8 +165,7 @@ def difference_target(item, candidate, signature):
             raise ValueError('difference edit must lie inside the conclusion or inside one hypothesis type')
         edited = [dict(hypothesis) for hypothesis in hypotheses]
         edited[matches[0]]['type'] = hypotheses[matches[0]]['type'].replace(old, new, 1)
-        source = ' ∧ '.join(f'({hypothesis["type"]})' for hypothesis in hypotheses)
-        intended = ' ∧ '.join(f'({hypothesis["type"]})' for hypothesis in edited)
+        source, intended = hypothesis_formula(hypotheses), hypothesis_formula(edited)
         part, names = 'hypotheses', hypotheses[matches[0]]['names']
     if intended == source:
         raise ValueError('difference edit does not change the formula')

@@ -1,7 +1,7 @@
 import unittest
 
 from yamalemma.consistency import consistency_summary
-from yamalemma.prompts import binder_move, declared_edit_kind, prepare_claim
+from yamalemma.prompts import binder_move, declared_edit_kind, hypothesis_formula, prepare_claim
 from yamalemma.signature import split_hypotheses
 
 
@@ -73,6 +73,14 @@ class SignatureSeparationTests(unittest.TestCase):
         for fields in ({'witnesses': '(G : Type)'}, {'edit_from': '(G : Type*)', 'edit_to': '(G : Type)'}, {'edit_from': 'Q', 'edit_to': 'R'}):
             with self.assertRaises(ValueError):
                 prepare_claim(SYNTHETIC, candidate(probe_kind='difference', location='godd', **fields), 1, SIGNATURE)
+
+    def test_dependent_hypotheses_keep_earlier_hypotheses_in_scope(self):
+        plain = [{'names': ['hN'], 'type': 'N > 0'}, {'names': ['hf'], 'type': 'f N = 1'}]
+        self.assertEqual(hypothesis_formula(plain), '(N > 0) ∧ (f N = 1)')
+        tactic = [{'names': ['hN'], 'type': 'N > 0'}, {'names': ['haN'], 'type': 'a ⟨N, by omega⟩ ≠ 0'}]
+        self.assertEqual(hypothesis_formula(tactic), '∃ (hN : N > 0) (haN : a ⟨N, by omega⟩ ≠ 0), True')
+        named = [{'names': ['hN'], 'type': 'N > 0'}, {'names': ['hM'], 'type': 'M = g N hN'}]
+        self.assertTrue(hypothesis_formula(named).startswith('∃ (hN : N > 0)'))
 
     def test_quantifying_over_a_theorem_binder_is_a_binder_move(self):
         item = {'binders': '(n : ℕ)\n  (x : Fin n → ℝ)', 'conclusion': '∃ N, P N ∧ Q x'}
