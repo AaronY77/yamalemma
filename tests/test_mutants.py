@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from yamalemma.evaluation import freeze_protocol
-from yamalemma.mutants import answer_edits, apply_edit, boundary_edits, domain_edits, score_mutants, wilson
+from yamalemma.mutants import answer_edits, apply_edit, boundary_edits, domain_edits, restoration, score_mutants, wilson
 
 
 def leaf(kind, raw, text, identifier=None):
@@ -57,6 +57,25 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(levels['evidence_checked_located']['detection_undetermined']['hits'], 1)
         self.assertEqual(levels['reader_suspicion']['detection_proved_equivalent']['hits'], 0)
         self.assertEqual(levels['reader_suspicion']['detection_proved_different']['n'], 0)
+
+
+class RestorationTests(unittest.TestCase):
+    def test_exact_restoration_and_refutations_are_counted_without_lean(self):
+        mutation = {'operator': 'boundary', 'replacement': '≤', 'detail': '< to ≤'}
+        key = [{'item_fingerprint': 'o1', 'group': 'g1', 'role': 'original', 'operator': None, 'mutation': None},
+               {'item_fingerprint': 'm1', 'group': 'g1', 'role': 'mutant', 'operator': 'boundary', 'mutation': mutation},
+               {'item_fingerprint': 'o2', 'group': 'g2', 'role': 'original', 'operator': None, 'mutation': None},
+               {'item_fingerprint': 'm2', 'group': 'g2', 'role': 'mutant', 'operator': 'boundary', 'mutation': mutation}]
+        items = [{'fingerprint': 'o1', 'signature_source': '(x : ℕ) : 0 < x', 'expected_type': '∀ (x : ℕ), 0 < x'},
+                 {'fingerprint': 'm1', 'signature_source': '(x : ℕ) : 0 ≤ x', 'expected_type': '∀ (x : ℕ), 0 ≤ x'},
+                 {'fingerprint': 'o2', 'signature_source': ': 1 < 2', 'expected_type': '1 < 2'},
+                 {'fingerprint': 'm2', 'signature_source': ': 1 ≤ 2', 'expected_type': '1 ≤ 2'}]
+        restoring = {'id': 'c1', 'template_kind': 'difference', 'type': 'domain', 'location': '0 ≤ x', 'edit': {'from': '0 ≤ x', 'to': '0 < x'}}
+        refuting = {'id': 'c2', 'template_kind': 'negated_statement', 'type': 'domain', 'location': '1 ≤ 2', 'edit': None}
+        reports = [report('m1', checked=[restoring]), report('m2', checked=[refuting]), report('o1')]
+        summary, rows = restoration(None, key, items, reports)
+        self.assertEqual((summary['restores_exact_text'], summary['no_edit'], summary['checked_claims']), (1, 1, 2))
+        self.assertTrue(all(row['located'] for row in rows))
 
 
 class SyntheticSplitTests(unittest.TestCase):

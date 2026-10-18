@@ -100,6 +100,7 @@ Progress on the same kind of measurement:
 | Extra hypothesis | 3 | 2 | 0 |
 | Scope | 2 | 2 | 0 |
 
+- **Restoration** (section 3j). Applying each Lean-checked claim's edit to its mutant restores the original exactly in 7 of 19 claims, and gives a statement proved equivalent to the original in 4 more. 4 are at the mutated text but not shown to restore it, 1 is elsewhere, and 3 refute the mutated statement with no edit. One equivalent restoration is the 1981 B2 answer, which the reader reproduced exactly, a possible sign of memorization.
 - **Equivalence buckets.** 6 mutants proved different (all wrong answers): reader 6/6, Lean-checked 2/6. 34 undetermined: reader 28/34, Lean-checked 17/34. None proved equivalent.
 - **Probe use.** Of 41 claims: `difference` 25 (15 checked), `negated_statement` 7 (3), `hypothesis_separation` 7 (2), `separation` 2 (0).
 - **Wrong answers.** Three wrong-answer mutants were checked. In one (1984 B1) Sol refuted the mutated statement on the actual objects.

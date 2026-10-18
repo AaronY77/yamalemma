@@ -388,3 +388,54 @@ def score_mutants(key, arms, lint):
         lint_table['precedence_note'] = LINT_CIRCULARITY
     result['lint'] = lint_table
     return result
+
+
+def flat(text):
+    return ' '.join(text.split())
+
+
+def restoration(worker, key, items, reports):
+    by_item = {item['fingerprint']: item for item in items}
+    by_key = {row['item_fingerprint']: row for row in key}
+    originals = {row['group']: by_item[row['item_fingerprint']] for row in key if row['role'] == 'original'}
+    rows = []
+    for report in reports:
+        meta = by_key[report['item_fingerprint']]
+        if meta['role'] != 'mutant':
+            continue
+        mutant, original = by_item[report['item_fingerprint']], originals[meta['group']]
+        for entry in report['claims']:
+            if entry['adjudication'].get('evidence_verdict') != 'EVIDENCE-CHECKED':
+                continue
+            claim = entry['claim']
+            row = {'group': meta['group'], 'operator': meta['operator'], 'claim_id': claim['id'], 'template': claim['template_kind'],
+                   'located': located(claim, meta), 'edit': claim.get('edit') and {'from': claim['edit']['from'], 'to': claim['edit']['to']}}
+            edit = claim.get('edit')
+            if not edit:
+                row['restoration'] = 'no_edit'
+            elif mutant['signature_source'].count(edit['from']) == 1 and \
+                    flat(mutant['signature_source'].replace(edit['from'], edit['to'], 1)) == flat(original['signature_source']):
+                row['restoration'] = 'exact_text'
+            elif mutant['expected_type'].count(edit['from']) != 1:
+                row['restoration'] = 'not_comparable'
+            else:
+                edited = mutant['expected_type'].replace(edit['from'], edit['to'], 1)
+                answers = [record['definition'] for record in mutant.get('source_transformations', [])]
+                if meta['operator'] == 'wrong_answer' and any(name in edited for name in answers):
+                    row['restoration'] = 'not_comparable'
+                else:
+                    proof = free_proof(worker, original, f'({original["expected_type"]}) ↔ ({edited})', EQUIVALENCE_PROOFS)
+                    row['restoration'] = 'proved_equivalent' if proof else 'different_or_undetermined'
+                    row['equivalence_proof'] = proof
+            rows.append(row)
+    restores = [row for row in rows if row['restoration'] in ('exact_text', 'proved_equivalent')]
+    summary = {'checked_claims': len(rows), 'checked_mutants': len({row['group'] for row in rows}),
+               'restores_exact_text': sum(row['restoration'] == 'exact_text' for row in rows),
+               'restores_proved_equivalent': sum(row['restoration'] == 'proved_equivalent' for row in rows),
+               'located_but_different': sum(row['located'] and row not in restores and row['restoration'] != 'no_edit' for row in rows),
+               'not_located': sum(not row['located'] for row in rows),
+               'no_edit': sum(row['restoration'] == 'no_edit' for row in rows),
+               'not_comparable': sum(row['restoration'] == 'not_comparable' for row in rows),
+               'rule': 'apply the claim edit to the mutant; exact_text compares the signature to the original up to whitespace; '
+                       'proved_equivalent is a free Lean proof of original ↔ edited statement; located_but_different counts located claims with an edit that neither matches nor is proved equivalent'}
+    return summary, rows

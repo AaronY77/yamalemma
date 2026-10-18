@@ -25,7 +25,7 @@ def emit(value):
 def main():
     parser = argparse.ArgumentParser(description='Yamalemma: controlled formal evidence and benchmark review')
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'fix-pairs', 'lint', 'lint-audit', 'mutate', 'score-mutants'):
+    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'fix-pairs', 'lint', 'lint-audit', 'mutate', 'score-mutants', 'mutant-restoration'):
         child = commands.add_parser(name)
         child.add_argument('--lean-project', type=Path, default=Path('lean'))
         child.add_argument('--timeout', type=float, default=60)
@@ -124,6 +124,11 @@ def main():
             child.add_argument('--seed', required=True)
             child.add_argument('--originals', type=int, required=True)
             child.add_argument('--informal', type=Path, required=True)
+            child.add_argument('--output', type=Path, required=True)
+        elif name == 'mutant-restoration':
+            child.add_argument('key', type=Path)
+            child.add_argument('--items', type=Path, required=True)
+            child.add_argument('--arm', type=Path, required=True)
             child.add_argument('--output', type=Path, required=True)
         elif name == 'score-mutants':
             child.add_argument('key', type=Path)
@@ -283,6 +288,12 @@ def main():
                       'elaborates': {role: count(role, 'elaborates') for role in ('pre_fix', 'post_fix')},
                       'both_elaborate_statement_changed': sum(row['statement_changed'] is True and all(row.get(role, {}).get('status') == 'elaborates' for role in ('pre_fix', 'post_fix')) for row in rows),
                       'output': args.output})
+            elif args.command == 'mutant-restoration':
+                from yamalemma.mutants import restoration
+                reports = [load_json(row['report']) for row in load_json(args.arm / 'summary.json')]
+                summary, rows = restoration(worker, load_json(args.key), load_json(args.items), reports)
+                save_json(args.output, {'summary': summary, 'claims': rows})
+                emit(summary)
             elif args.command == 'mutate':
                 from yamalemma.lints import lint_item
                 from yamalemma.mutants import blinded_outputs, generate
