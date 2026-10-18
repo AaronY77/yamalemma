@@ -25,7 +25,7 @@ def emit(value):
 def main():
     parser = argparse.ArgumentParser(description='Yamalemma: controlled formal evidence and benchmark review')
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history'):
+    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'lint'):
         child = commands.add_parser(name)
         child.add_argument('--lean-project', type=Path, default=Path('lean'))
         child.add_argument('--timeout', type=float, default=60)
@@ -45,6 +45,9 @@ def main():
             child.add_argument('--selection', type=Path)
             child.add_argument('--benchmark-answers', action='store_true')
             child.add_argument('--output', type=Path, default=Path('.yamalemma/items.json'))
+        elif name == 'lint':
+            child.add_argument('items', type=Path)
+            child.add_argument('--output', type=Path, required=True)
         elif name == 'precheck':
             child.add_argument('items', type=Path)
             child.add_argument('--output', type=Path, default=Path('.yamalemma/prechecks.json'))
@@ -219,6 +222,15 @@ def main():
                                       answers=args.benchmark_answers)
                 save_json(args.output, items)
                 emit({'items': len(items), 'output': args.output})
+            elif args.command == 'lint':
+                from yamalemma.lints import lint_item
+                results = [lint_item(worker, item) for item in load_json(args.items) if 'fingerprint' in item]
+                save_json(args.output, results)
+                flagged = [{'item': row['item_id'], 'strength': finding['strength'],
+                            'edit': (finding.get('suggested_edit') or {}).get('kind')}
+                           for row in results for finding in row['findings']]
+                emit({'items': len(results), 'statuses': sorted({row['status'] for row in results}),
+                      'flagged': flagged, 'output': args.output})
             elif args.command == 'precheck':
                 results = [precheck(worker, item) for item in load_json(args.items)]
                 save_json(args.output, results)
