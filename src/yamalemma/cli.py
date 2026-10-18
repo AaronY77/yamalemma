@@ -25,7 +25,7 @@ def emit(value):
 def main():
     parser = argparse.ArgumentParser(description='Yamalemma: controlled formal evidence and benchmark review')
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'lint', 'lint-audit'):
+    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'fix-pairs', 'lint', 'lint-audit'):
         child = commands.add_parser(name)
         child.add_argument('--lean-project', type=Path, default=Path('lean'))
         child.add_argument('--timeout', type=float, default=60)
@@ -108,6 +108,13 @@ def main():
         elif name == 'fix-history':
             child.add_argument('source', type=Path)
             child.add_argument('--since')
+        elif name == 'fix-pairs':
+            child.add_argument('source', type=Path)
+            child.add_argument('--since')
+            child.add_argument('--exclude-selection', type=Path, action='append', default=[])
+            child.add_argument('--informal', type=Path)
+            child.add_argument('--benchmark-answers', action='store_true')
+            child.add_argument('--output', type=Path, required=True)
         elif name == 'intake-collect':
             child.add_argument('manifest', type=Path)
             child.add_argument('--responses', type=Path, required=True)
@@ -238,6 +245,19 @@ def main():
                            for row in results for finding in row['findings']]
                 emit({'items': len(results), 'statuses': sorted({row['status'] for row in results}),
                       'flagged': flagged, 'output': args.output})
+            elif args.command == 'fix-pairs':
+                from yamalemma.selection import fix_pairs, ingest_fix_pairs
+                excluded = {name for path in args.exclude_selection for name in load_json(path)['selected']}
+                manifest = fix_pairs(args.source, args.output, args.since, excluded)
+                informal = {entry['problem_name']: entry['informal_statement'] for entry in load_json(args.informal)} if args.informal else {}
+                items, rows = ingest_fix_pairs(worker, manifest, args.output, informal, args.benchmark_answers)
+                save_json(args.output / 'items.json', items)
+                save_json(args.output / 'status.json', rows)
+                count = lambda role, status: sum(row.get(role, {}).get('status') == status for row in rows)
+                emit({'pairs': len(rows), 'skipped': len(manifest['skipped']), 'fix_like': sum(row['fix_like'] for row in rows),
+                      'elaborates': {role: count(role, 'elaborates') for role in ('pre_fix', 'post_fix')},
+                      'both_elaborate_statement_changed': sum(row['statement_changed'] is True and all(row.get(role, {}).get('status') == 'elaborates' for role in ('pre_fix', 'post_fix')) for row in rows),
+                      'output': args.output})
             elif args.command == 'lint-audit':
                 from yamalemma.lints import run_lint_audit
                 from yamalemma.models import ModelClient

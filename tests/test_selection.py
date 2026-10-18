@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from yamalemma.selection import check_selection, fix_history, select_heldout, write_selection
+from yamalemma.selection import check_selection, fix_history, fix_pairs, select_heldout, write_selection
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +69,26 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('Fix 2003 A1 statement', subjects)
         self.assertNotIn('Update Lean toolchain and Mathlib', subjects)
         self.assertEqual(rows[0]['problems'], ['putnam_2003_a1'])
+
+    def test_fix_pairs_record_both_versions_and_exclude_held_out_problems(self):
+        identity = ['-c', 'user.email=fixture@example.com', '-c', 'user.name=fixture']
+        (self.source / 'putnam_2003_a1.lean').write_text('theorem putnam_2003_a1 : 1 = 1 := rfl\n')
+        (self.source / 'putnam_2005_a1.lean').write_text('theorem putnam_2005_a1 : 3 = 3 := rfl\n')
+        (self.source / 'putnam_2009_a1.lean').write_text('theorem putnam_2009_a1 : True := trivial\n')
+        run(self.repo, *identity, 'add', '.')
+        run(self.repo, *identity, 'commit', '-qm', 'Fix statements')
+        output = Path(self.repo.parent) / 'pairs'
+        manifest = fix_pairs(self.source, output, exclude={'putnam_2005_a1'})
+        self.assertEqual([pair['problem'] for pair in manifest['pairs']], ['putnam_2003_a1'])
+        pair = manifest['pairs'][0]
+        self.assertTrue(pair['fix_like'])
+        self.assertEqual((output / pair['files']['pre_fix']['path']).read_text(), 'theorem putnam_2003_a1 : True := trivial\n')
+        self.assertEqual((output / pair['files']['post_fix']['path']).read_text(), 'theorem putnam_2003_a1 : 1 = 1 := rfl\n')
+        latest = pair['group'].split('@')[1]
+        reasons = {row['group'].split('@')[0]: row['reason'] for row in manifest['skipped'] if row['group'].endswith(latest)}
+        self.assertEqual(reasons, {'putnam_2005_a1': 'excluded problem', 'putnam_2009_a1': 'file added or removed by this commit'})
+        with self.assertRaises(FileExistsError):
+            fix_pairs(self.source, output)
 
     def test_putnambench_environment_uses_the_same_worker(self):
         self.assertEqual((ROOT / 'lean' / 'Yamalemma' / 'Worker.lean').read_bytes(),
