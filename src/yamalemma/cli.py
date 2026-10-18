@@ -25,7 +25,7 @@ def emit(value):
 def main():
     parser = argparse.ArgumentParser(description='Yamalemma: controlled formal evidence and benchmark review')
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'lint'):
+    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'lint', 'lint-audit'):
         child = commands.add_parser(name)
         child.add_argument('--lean-project', type=Path, default=Path('lean'))
         child.add_argument('--timeout', type=float, default=60)
@@ -48,6 +48,13 @@ def main():
         elif name == 'lint':
             child.add_argument('items', type=Path)
             child.add_argument('--output', type=Path, required=True)
+        elif name == 'lint-audit':
+            child.add_argument('items', type=Path)
+            child.add_argument('--config', type=Path, required=True)
+            child.add_argument('--output', type=Path, required=True)
+            child.add_argument('--item-id')
+            child.add_argument('--elaborate-only', action='store_true')
+            child.add_argument('--offline', action='store_true')
         elif name == 'precheck':
             child.add_argument('items', type=Path)
             child.add_argument('--output', type=Path, default=Path('.yamalemma/prechecks.json'))
@@ -173,7 +180,7 @@ def main():
             save_json(args.output, result)
             emit(result)
             return
-        config = load_config(args.config) if args.command in ('audit', 'evaluate') else None
+        config = load_config(args.config) if args.command in ('audit', 'evaluate', 'lint-audit') else None
         if args.command == 'run':
             result = run_lean(args.lean_project, args.fixture, args.timeout)
             output = asdict(result)
@@ -231,6 +238,16 @@ def main():
                            for row in results for finding in row['findings']]
                 emit({'items': len(results), 'statuses': sorted({row['status'] for row in results}),
                       'flagged': flagged, 'output': args.output})
+            elif args.command == 'lint-audit':
+                from yamalemma.lints import run_lint_audit
+                from yamalemma.models import ModelClient
+                items = [item for item in load_json(args.items) if 'fingerprint' in item]
+                if args.item_id:
+                    items = [item for item in items if item['id'] == args.item_id]
+                    if not items:
+                        raise ValueError('requested item ID was not found')
+                client = None if args.elaborate_only else ModelClient(config, args.output / 'models', offline=args.offline)
+                emit(run_lint_audit(worker, items, config, args.output, client))
             elif args.command == 'precheck':
                 results = [precheck(worker, item) for item in load_json(args.items)]
                 save_json(args.output, results)
