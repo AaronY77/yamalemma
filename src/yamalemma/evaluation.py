@@ -5,6 +5,9 @@ from pathlib import Path
 from yamalemma.domain import fingerprint, load_json, save_json
 
 
+SCORED_SPLITS = ('heldout', 'synthetic')
+
+
 def freeze_protocol(dataset, configurations, destination):
     if len(configurations) < 2:
         raise ValueError('evaluation requires at least two declared configurations')
@@ -17,10 +20,13 @@ def freeze_protocol(dataset, configurations, destination):
         ids.add(row['item_fingerprint'])
         if row.get('label') not in ('defect', 'control', 'unlabeled'):
             raise ValueError('invalid evaluation label')
-        if row.get('split') not in ('development', 'heldout') or not row.get('group'):
+        if row.get('split') not in ('development', 'heldout', 'synthetic') or not row.get('group'):
             raise ValueError('evaluation needs explicit provenance groups and splits')
-        if row.get('label') != 'unlabeled' and not all(row.get(key) for key in ('reviewer', 'label_basis', 'provenance')):
-            raise ValueError('labels require independent review and provenance; untouched items are not clean controls')
+        if (row.get('split') == 'synthetic') != bool(row.get('synthetic')):
+            raise ValueError('synthetic rows must be marked synthetic and stay in the synthetic split')
+        evidence = ('construction', 'label_basis', 'provenance') if row.get('synthetic') else ('reviewer', 'label_basis', 'provenance')
+        if row.get('label') != 'unlabeled' and not all(row.get(key) for key in evidence):
+            raise ValueError('labels require independent review or a synthetic construction, plus provenance; untouched items are not clean controls')
         if row['group'] in groups and groups[row['group']] != row['split']:
             raise ValueError('provenance group leaks across development and held-out splits')
         groups[row['group']] = row['split']
@@ -50,7 +56,7 @@ def score(protocol, reports, configuration, config, judgments=None):
     verify_protocol(protocol)
     if protocol['configurations'].get(configuration) != fingerprint(config):
         raise ValueError('evaluation configuration differs from the frozen protocol')
-    rows = {row['item_fingerprint']: row for row in protocol['dataset'] if row['split'] == 'heldout'}
+    rows = {row['item_fingerprint']: row for row in protocol['dataset'] if row['split'] in SCORED_SPLITS}
     found = {}
     for report in reports:
         if report.get('hash') != fingerprint({key: value for key, value in report.items() if key != 'hash'}):
@@ -153,7 +159,7 @@ def evaluate(worker, items, protocol, config, name, output, offline=False):
     verify_protocol(protocol)
     if protocol['configurations'].get(name) != fingerprint(config):
         raise ValueError('configuration is not frozen in this protocol')
-    expected = {row['item_fingerprint'] for row in protocol['dataset'] if row['split'] == 'heldout'}
+    expected = {row['item_fingerprint'] for row in protocol['dataset'] if row['split'] in SCORED_SPLITS}
     if {item['fingerprint'] for item in items} != expected or len(items) != len(expected):
         raise ValueError('evaluation items differ from the frozen held-out set')
     output = Path(output)

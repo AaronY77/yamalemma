@@ -25,7 +25,7 @@ def emit(value):
 def main():
     parser = argparse.ArgumentParser(description='Yamalemma: controlled formal evidence and benchmark review')
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'fix-pairs', 'lint', 'lint-audit'):
+    for name in ('run', 'check', 'ingest', 'precheck', 'demo', 'replay', 'doctor', 'audit', 'freeze', 'evaluate', 'score', 'draft', 'review-audit', 'model-info', 'local-model', 'budget-status', 'budget-init', 'budget-limit', 'intake-export', 'intake-collect', 'select-heldout', 'fix-history', 'fix-pairs', 'lint', 'lint-audit', 'mutate', 'score-mutants'):
         child = commands.add_parser(name)
         child.add_argument('--lean-project', type=Path, default=Path('lean'))
         child.add_argument('--timeout', type=float, default=60)
@@ -115,6 +115,21 @@ def main():
             child.add_argument('--informal', type=Path)
             child.add_argument('--benchmark-answers', action='store_true')
             child.add_argument('--output', type=Path, required=True)
+        elif name == 'mutate':
+            child.add_argument('source', type=Path)
+            child.add_argument('--selection', type=Path, required=True)
+            child.add_argument('--development', type=Path, required=True)
+            child.add_argument('--exclude-selection', type=Path, action='append', default=[])
+            child.add_argument('--skip-key', type=Path, action='append', default=[])
+            child.add_argument('--seed', required=True)
+            child.add_argument('--originals', type=int, required=True)
+            child.add_argument('--informal', type=Path, required=True)
+            child.add_argument('--output', type=Path, required=True)
+        elif name == 'score-mutants':
+            child.add_argument('key', type=Path)
+            child.add_argument('--arm', action='append', default=[])
+            child.add_argument('--lint', type=Path, required=True)
+            child.add_argument('--output', type=Path, required=True)
         elif name == 'intake-collect':
             child.add_argument('manifest', type=Path)
             child.add_argument('--responses', type=Path, required=True)
@@ -151,6 +166,16 @@ def main():
         if args.command == 'fix-history':
             from yamalemma.selection import fix_history
             emit(fix_history(args.source, args.since))
+            return
+        if args.command == 'score-mutants':
+            from yamalemma.mutants import score_mutants
+            arms = {}
+            for value in args.arm:
+                name, path = value.split('=', 1)
+                arms[name] = [load_json(row['report']) for row in load_json(Path(path) / 'summary.json')]
+            result = score_mutants(load_json(args.key), arms, load_json(args.lint))
+            save_json(args.output, result)
+            emit(result)
             return
         if args.command == 'intake-export':
             from yamalemma.intake import export_packets
@@ -258,6 +283,37 @@ def main():
                       'elaborates': {role: count(role, 'elaborates') for role in ('pre_fix', 'post_fix')},
                       'both_elaborate_statement_changed': sum(row['statement_changed'] is True and all(row.get(role, {}).get('status') == 'elaborates' for role in ('pre_fix', 'post_fix')) for row in rows),
                       'output': args.output})
+            elif args.command == 'mutate':
+                from yamalemma.lints import lint_item
+                from yamalemma.mutants import blinded_outputs, generate
+                from yamalemma.selection import check_selection
+                selection = load_json(args.selection)
+                names = check_selection(selection, args.source)
+                excluded = {row['name'] for row in load_json(args.development)['problems']}
+                excluded |= {name for path in args.exclude_selection for name in load_json(path)['selected']}
+                skip = {row['group'] for path in args.skip_key for row in load_json(path)}
+                args.output.mkdir(parents=True, exist_ok=False)
+                informal = {entry['problem_name']: entry['informal_statement'] for entry in load_json(args.informal)}
+                rows, rejected, quota = generate(worker, args.source, sorted(names - excluded), args.seed, args.originals, informal,
+                                                 selection['benchmark_commit'], skip=skip)
+                items, key, dataset = blinded_outputs(rows, args.seed, selection['benchmark_commit'], selection['file_sha256'])
+                lint = [lint_item(worker, item) for item in items]
+                for name, value in (('items.json', items), ('key.json', key), ('dataset.json', dataset), ('rejected.json', rejected), ('lint.json', lint)):
+                    save_json(args.output / name, value)
+                buckets = {}
+                for row in key:
+                    if row['role'] == 'mutant':
+                        buckets.setdefault(row['operator'], {}).setdefault(row['equivalence']['bucket'], 0)
+                        buckets[row['operator']][row['equivalence']['bucket']] += 1
+                lint_by = {record['item_fingerprint']: bool(record.get('findings')) for record in lint}
+                summary = {'seed': args.seed, 'benchmark_commit': selection['benchmark_commit'], 'pool': len(names - excluded),
+                           'originals': len(rows), 'mutants': len(rows), 'operators': quota, 'equivalence_by_operator': buckets,
+                           'rejected_attempts': len(rejected),
+                           'lint_flagged': {'originals': sum(lint_by[row['item_fingerprint']] for row in key if row['role'] == 'original'),
+                                            'mutants': {operator: sum(lint_by[row['item_fingerprint']] for row in key if row['operator'] == operator) for operator in quota}},
+                           'lint_statuses': sorted({record['status'] for record in lint})}
+                save_json(args.output / 'summary.json', summary)
+                emit(summary)
             elif args.command == 'lint-audit':
                 from yamalemma.lints import run_lint_audit
                 from yamalemma.models import ModelClient
