@@ -159,6 +159,7 @@ The shared ledger stands at 368 of 500 calls and $21.35 of $32.00 reserved, unde
 - **Free equivalence checks are limited.** They can prove difference only for answer changes, so most mutants are undetermined.
 - **Contamination.** PutnamBench is public and likely in training data.
 - **Small samples.** All intervals are wide, and the comparisons are descriptive.
+- **Known issue: local back-translation truncation.** In the 40 + 40 study, 47 of 80 back-translations were truncated. Every truncated local call spent the 768-token output limit on DeepSeek R1 7B's reasoning trace, despite `think = false`. Raising the local output limit would probably fix it at no hosted cost. It is documented and not yet changed (section 3j).
 
 ## Next steps
 
