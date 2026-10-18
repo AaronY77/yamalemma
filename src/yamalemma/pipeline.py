@@ -2,6 +2,7 @@ import time
 from pathlib import Path
 
 from yamalemma.adjudicate import adjudicate
+from yamalemma.consistency import consistency_summary
 from yamalemma.domain import fingerprint, file_hash, make_probe, save_json
 from yamalemma.harness import BLOCKED, check_probe, environment_record, render_target, validate_item
 from yamalemma.models import ModelClient
@@ -9,6 +10,7 @@ from yamalemma.precheck import precheck
 from yamalemma.prompts import (PROMPT_VERSION, READER_SCHEMA, WRITER_SCHEMA, BACKTRANSLATION_SCHEMA, COMPARISON_SCHEMA,
                                backtranslation_messages, reader_messages, writer_messages, prepare_claim, messages)
 from yamalemma.report import write_report
+from yamalemma.signature import hypothesis_signature
 from yamalemma.storage import ArtifactStore
 from yamalemma.worker import WorkerError
 
@@ -74,7 +76,7 @@ def audit_item(worker, client, item, config, directory, protocol=None):
         validate_item(item, worker.project)
         binding = {'item': item['fingerprint'], 'environment': environment_record(worker.project)['fingerprint'],
                    'config': fingerprint(config), 'prompts': PROMPT_VERSION, 'protocol': protocol,
-                   'implementation': {name: file_hash(Path(__file__).parent / name) for name in ('models.py', 'prompts.py', 'pipeline.py', 'config.py', 'fixes.py', 'budget.py', 'credentials.py')}}
+                   'implementation': {name: file_hash(Path(__file__).parent / name) for name in ('models.py', 'prompts.py', 'pipeline.py', 'config.py', 'fixes.py', 'budget.py', 'credentials.py', 'consistency.py', 'signature.py')}}
         advisory = None
         if config['stages']['backtranslation']:
             paraphrase = client.complete('backtranslator', 'backtranslation', backtranslation_messages(item, checks), BACKTRANSLATION_SCHEMA, binding)
@@ -90,23 +92,36 @@ def audit_item(worker, client, item, config, directory, protocol=None):
             result['advisory'] = advisory
         readers = ['reader'] + (['second_reader'] if config['stages']['second_reader'] else [])
         candidates, states, seen = [], [], set()
+        samples = config['limits'].get('reader_samples', 1)
         for role in readers:
-            call = client.complete(role, 'reader', reader_messages(item, checks, advisory), READER_SCHEMA, binding)
-            states.append(call['status'])
-            if call['status'] == 'completed':
-                for candidate in call['data']['claims']:
-                    key = fingerprint(candidate)
-                    if key not in seen:
-                        candidates.append(candidate)
-                        seen.add(key)
+            sampled = []
+            for sample in range(samples):
+                call = client.complete(role, 'reader', reader_messages(item, checks, advisory), READER_SCHEMA,
+                                       dict(binding, sample=sample) if samples > 1 else binding)
+                states.append(call['status'])
+                sampled.append(call['data']['claims'] if call['status'] == 'completed' else [])
+            if samples > 1:
+                found, summary = consistency_summary(item, sampled, states[-samples:])
+                result.setdefault('reader_consistency', {})[role] = dict(summary, sample_claims=sampled)
+            else:
+                found = sampled[0]
+            for candidate in found:
+                key = fingerprint(candidate)
+                if key not in seen:
+                    candidates.append(candidate)
+                    seen.add(key)
         result['reader_statuses'] = states
         result['reader_claims'] = candidates
         result['status'] = 'reviewed' if all(state == 'completed' for state in states) else 'reader_incomplete'
         result['no_claim_detected'] = not candidates and all(state == 'completed' for state in states)
         result['claims_omitted_by_limit'] = max(0, len(candidates) - config['limits']['max_claims'])
+        signature = None
         for index, candidate in enumerate(candidates[:config['limits']['max_claims']], 1):
+            if candidate.get('probe_kind') == 'hypothesis_separation' and signature is None:
+                signature = hypothesis_signature(worker, item)
+                result['signature'] = signature
             try:
-                claim = prepare_claim(item, candidate, index)
+                claim = prepare_claim(item, candidate, index, signature)
             except ValueError as error:
                 result['rejected_candidates'].append({'candidate': candidate, 'reason': str(error)})
                 continue

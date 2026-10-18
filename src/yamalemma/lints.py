@@ -6,22 +6,12 @@ from yamalemma.domain import file_hash, fingerprint, save_json
 from yamalemma.harness import environment_record, render_target, validate_item
 from yamalemma.prompts import PROMPT_VERSION, edit_kind, prepare_claim
 from yamalemma.report import write_report
+from yamalemma.signature import binder_groups, declaration_signature, identifiers, text, walk
 
 
 BINDER_SUFFIXES = ('term∀__,_»', 'term∃__,_»', 'term∃_,_»', 'Term.forall', 'Term.fun', 'term∃!_,_»')
-GROUPS = ('explicitBinder', 'implicitBinder', 'strictImplicitBinder')
 IMPLICATIONS = ('Lean.Parser.Term.arrow', '«term_↔_»')
 CONNECTIVES = ('«term_∧_»', '«term_∨_»')
-
-
-def walk(node):
-    yield node
-    for child in node.get('children', []):
-        yield from walk(child)
-
-
-def text(node):
-    return (node.get('text') or '').strip()
 
 
 def is_binder(node):
@@ -104,43 +94,24 @@ def lint_conclusion(conclusion_node, conclusion_text):
     return findings
 
 
-def find(node, suffix):
-    return next((part for part in walk(node) if part['kind'].endswith(suffix)), None)
-
-
-def identifiers(node):
-    names = set()
-    for leaf in walk(node):
-        if leaf['kind'] == 'ident' and leaf.get('identifier'):
-            names |= {leaf['identifier'], leaf['identifier'].split('.')[0]}
-    return names
-
-
-def binder_group(node):
-    names = [leaf['identifier'] for leaf in walk(node['children'][1]) if leaf['kind'] == 'ident' and leaf.get('identifier')]
-    typed = next((child for child in node['children'][2:] if child['kind'] == 'null' and child.get('children')
-                  and text(child['children'][0]) == ':'), None)
-    return {'names': names, 'type': typed['children'][-1] if typed else None, 'text': text(node)}
-
-
 def witness_binders(binders, conclusion):
-    groups = [binder_group(node) for node in binders.get('children', []) if node['kind'].endswith(GROUPS)]
-    others = [text(node) for node in binders.get('children', []) if not node['kind'].endswith(GROUPS)]
+    groups = binder_groups(binders)
+    others = [text(node) for node in binders.get('children', []) if not node['kind'].endswith(('explicitBinder', 'implicitBinder', 'strictImplicitBinder', 'instBinder'))]
     needed = identifiers(conclusion)
     kept = set()
     changed = True
     while changed:
         changed = False
         for index, group in enumerate(groups):
-            if index not in kept and needed & set(group['names']):
+            if index not in kept and not group['instance'] and needed & set(group['names']):
                 kept.add(index)
-                needed |= identifiers(group['type']) if group['type'] else set()
+                needed |= set(group['uses'])
                 changed = True
     parts = []
     for index, group in enumerate(groups):
         if index in kept:
             names = ' '.join(group['names'])
-            parts.append(f'({names} : {text(group["type"])})' if group['type'] else f'({names})')
+            parts.append(f'({names} : {group["type"]})' if group['type'] else f'({names})')
     return {'binders': ' '.join(parts), 'names': [name for index in sorted(kept) for name in groups[index]['names']],
             'dropped': [group['text'] for index, group in enumerate(groups) if index not in kept] + others}
 
@@ -148,25 +119,14 @@ def witness_binders(binders, conclusion):
 def lint_item(worker, item):
     record = {'item_id': item.get('id'), 'item_fingerprint': item.get('fingerprint'), 'findings': [],
               'scope': 'deterministic parse lint; a finding is a suspicion about grouping, not a confirmed defect'}
-    if 'raw_source' not in item or 'span' not in item:
-        return dict(record, status='unsupported')
-    parsed = worker.request({'action': 'extract', 'source': item['raw_source'].replace('\r\n', '\n')})
-    if parsed.get('status') != 'parsed':
-        return dict(record, status='unparsed', error=str(parsed.get('error', parsed.get('status')))[:500])
-    start = item['span']['start_byte']
-    for command in parsed['commands']:
-        for part in walk(command):
-            if part['kind'].endswith('.theorem') and part.get('start') is not None and abs(part['start'] - start) <= 1:
-                signature = find(part, '.declSig')
-                spec = find(signature['children'][1], '.typeSpec') if signature and len(signature['children']) > 1 else None
-                if spec:
-                    conclusion = spec['children'][-1]
-                    record['findings'] = lint_conclusion(conclusion, item['conclusion'])
-                    for finding in record['findings']:
-                        if 'suggested_edit' in finding:
-                            finding['witnesses'] = witness_binders(signature['children'][0], conclusion)
-                    return dict(record, status='linted')
-    return dict(record, status='declaration_not_found')
+    found = declaration_signature(worker, item)
+    if found['status'] != 'found':
+        return dict(record, **found)
+    record['findings'] = lint_conclusion(found['conclusion'], item['conclusion'])
+    for finding in record['findings']:
+        if 'suggested_edit' in finding:
+            finding['witnesses'] = witness_binders(found['binders'], found['conclusion'])
+    return dict(record, status='linted')
 
 
 def lint_candidate(finding):

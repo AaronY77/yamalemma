@@ -63,8 +63,10 @@ def validate_config(value):
             raise ValueError(f'{stage} requires corresponding model profiles')
     limits = config.setdefault('limits', {})
     defaults = {'max_repairs': 3, 'max_claims': 3, 'max_calls': 30, 'max_cost_usd': 2.0, 'max_input_bytes': 30000}
-    if set(limits) - set(defaults):
+    if set(limits) - set(defaults) - {'reader_samples'}:
         raise ValueError('unknown run limit')
+    if 'reader_samples' in limits and (type(limits['reader_samples']) is not int or not 1 <= limits['reader_samples'] <= 5):
+        raise ValueError('reader_samples must be an integer from 1 to 5')
     for name, default in defaults.items():
         limits.setdefault(name, default)
         if type(limits[name]) not in (int, float) or not math.isfinite(limits[name]) or limits[name] < 0:
