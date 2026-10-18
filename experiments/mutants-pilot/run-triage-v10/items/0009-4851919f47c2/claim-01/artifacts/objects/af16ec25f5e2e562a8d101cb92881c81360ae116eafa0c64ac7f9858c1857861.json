@@ -1,0 +1,52 @@
+{
+  "claim_fingerprint": "c25035ed319d312ee18abc3b4b24a2a52454c25fcaa1d822fd553dd7a784f230",
+  "item_fingerprint": "48c2fa161ad4bc9e07ac9d8c1e45a54b5d157d99e6d47d81ba63c7590543f9c6",
+  "polarity": "confirm",
+  "expected": "open Function Set in\n∃ (c : ℕ → ℤ), ¬ (((c 1 = 1) ∧ (∀ n : ℕ, n > 0 → c (2 * n + 1) = (-1) ^ n * c n)) ↔ ((c 1 = 1) ∧ ((∀ n : ℕ, n > 0 → c (2 * n + 1) = (-1) ^ n * c n) ∧ (∀ n : ℕ, n > 0 → c (2 * n) = c n))))",
+  "probe": {
+    "schema_version": 1,
+    "claim_fingerprint": "c25035ed319d312ee18abc3b4b24a2a52454c25fcaa1d822fd553dd7a784f230",
+    "item_fingerprint": "48c2fa161ad4bc9e07ac9d8c1e45a54b5d157d99e6d47d81ba63c7590543f9c6",
+    "polarity": "confirm",
+    "template": "proposition-v1",
+    "expected": "open Function Set in\n∃ (c : ℕ → ℤ), ¬ (((c 1 = 1) ∧ (∀ n : ℕ, n > 0 → c (2 * n + 1) = (-1) ^ n * c n)) ↔ ((c 1 = 1) ∧ ((∀ n : ℕ, n > 0 → c (2 * n + 1) = (-1) ^ n * c n) ∧ (∀ n : ℕ, n > 0 → c (2 * n) = c n))))",
+    "proof": "by\n  let c : ℕ → ℤ := fun m =>\n    Nat.strongRecOn m (fun k ih =>\n      if k = 1 then 1 else\n      if h : k > 1 ∧ k % 2 = 1 then\n        (-1 : ℤ) ^ ((k - 1) / 2) * ih ((k - 1) / 2) (by omega)\n      else 0)\n  have hc (m : ℕ) :\n      c m = if m = 1 then 1 else\n        if h : m > 1 ∧ m % 2 = 1 then\n          (-1 : ℤ) ^ ((m - 1) / 2) * c ((m - 1) / 2)\n        else 0 := by\n    unfold c\n    rw [Nat.strongRecOn_eq]\n    rfl\n  have hc1 : c 1 = 1 := by rw [hc]; simp\n  have hc2 : c 2 = 0 := by rw [hc]; norm_num\n  have hodd : ∀ n : ℕ, n > 0 → c (2 * n + 1) = (-1 : ℤ) ^ n * c n := by\n    intro n hn\n    rw [hc]\n    have ha : 2 * n + 1 ≠ 1 := by omega\n    have hb : 2 * n + 1 > 1 ∧ (2 * n + 1) % 2 = 1 := by omega\n    simp only [if_neg ha, dif_pos hb]\n    have hdiv : (2 * n + 1 - 1) / 2 = n := by omega\n    rw [hdiv]\n  refine ⟨c, ?_⟩\n  intro heq\n  have heven := (heq.mp ⟨hc1, hodd⟩).2.2 1 (by omega)\n  norm_num [hc1, hc2] at heven"
+  },
+  "environment": {
+    "lean-toolchain": "7bc3447cbd72d5618fae8359a8f2eb94d86b4ad25dde7ce79df2a283247262e3",
+    "lakefile.toml": "10f650a58ad56ff3990fdd550aff40d7642cab4bbf037ad85324d5f1a3e7bec8",
+    "lake-manifest.json": "89a4a712c54fa01c2fe84d7e55f61c266c538248b93ca9a95a19885799601d29",
+    "Yamalemma/Worker.lean": "103da5486fe5ee50ef8c68c474d88db05c161a48918b450667992e93d2002449",
+    "policy": "kernel-type-and-axioms-v1",
+    "toolchain": "leanprover/lean4:v4.33.1",
+    "implementation": {
+      "harness.py": "be6c6a7f78e94d2b8573c0f5f3ef03c2320c1def68d27dec0150ecefffa9af65",
+      "worker.py": "41d257a82fffdbdd24c517589ad73ae6bc2f7bac8b4c943ce07f5d499241f718",
+      "ingest.py": "afb6af91e58dc35192083ac3706d578a3e3765c5a0daf10c9bba179f0efe06e8",
+      "domain.py": "643e19c7901c95e14d722ef91708bbae1fad762be16ab7e55587b056ec536abb",
+      "axiom_policy.py": "e3fbbeac5a6adf38e22654720d405f1dd312d033ea69f61910833715beccc0c1",
+      "adjudicate.py": "cf1840c7de0fa32088130d01ba81fb72c2ab90ad975ba62128280a785fa724ef",
+      "templates.py": "c7fca2269d340a11004443121fb833d56f423c82d72146564c3624692442b5bb",
+      "precheck.py": "dbe37a3507496769fab44c6f7ad4853c44397f6d1827e39a1b14c006a4c32a86",
+      "report.py": "9ff729c9c182e28ac4249ac0477599138f8e7c93bfdcd8f1667711fd8e752394",
+      "storage.py": "c78fb13bb2a4a864916afdd28298f78701c44e13b82de1aedfcbb4b9dc9849b7",
+      "proof_syntax.json": "b3459657b463e47aab90a0dc2771ce525f7ea3e3bd239b38a2dac186fbed390f"
+    },
+    "fingerprint": "50a77b70d932ea9dfb6e0fc44864ce9ca2e1884ea35b7e52530de752b62136d4"
+  },
+  "scope": "source-bound formal probe; interpretation pending",
+  "accepted": false,
+  "type_matches": false,
+  "axiom_policy": "unreadable",
+  "proof_opens": [
+    "open Function Set"
+  ],
+  "attempt": {
+    "status": "failure",
+    "error": "probe.lean:1:453: error: No goals to be solved\n",
+    "elapsed_seconds": 0.2490610750101041,
+    "worker_generation": 1
+  },
+  "reason": "probe.lean:1:453: error: No goals to be solved\n",
+  "id": "2825eade4559f06895ebba911fbee167f821f12b729769788ca20b02d746e2af"
+}
