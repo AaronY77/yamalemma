@@ -5,7 +5,7 @@ from yamalemma.domain import BRIDGES, CLAIM_TYPES, fingerprint, make_claim
 from yamalemma.ingest import wrap
 
 
-PROMPT_VERSION = 'audit-prompts-v9'
+PROMPT_VERSION = 'audit-prompts-v10'
 
 
 def object_schema(fields):
@@ -16,7 +16,7 @@ TEXT = {'type': 'string', 'minLength': 1, 'maxLength': 12000}
 CLAIM_SCHEMA = object_schema({
     'type': {'type': 'string', 'enum': sorted(CLAIM_TYPES)}, 'location': TEXT,
     'explanation': TEXT, 'prediction': TEXT,
-    'probe_kind': {'type': 'string', 'enum': ['statement', 'negated_statement', 'vacuity', 'equivalence', 'separation', 'hypothesis_separation']},
+    'probe_kind': {'type': 'string', 'enum': ['statement', 'negated_statement', 'vacuity', 'equivalence', 'separation', 'hypothesis_separation', 'difference']},
     'comparison': {'type': ['string', 'null']},
     'witnesses': {'type': ['string', 'null']},
     'edit_from': {'type': ['string', 'null']},
@@ -57,6 +57,10 @@ def reader_messages(item, checks, advisory=None):
                     'A suspicion is not a confirmed defect. location must be an exact nonempty substring of signature. '
                     'Choose statement to test provability of the original proposition, negated_statement for its negation, vacuity to test False under the declaration binders, '
                     'or equivalence to compare the entire original proposition with comparison. '
+                    'For a local error in the conclusion or in one hypothesis, prefer difference: give only edit_from, an exact substring occurring once in signature inside the conclusion or inside one hypothesis type, '
+                    'and edit_to, the smallest replacement that corrects it, with witnesses null. The harness quantifies over the non-hypothesis binders, keeps only the edited formula, '
+                    'and tests that some instance makes the source formula and the edited formula disagree. '
+                    'Use statement or negated_statement only when no single edit expresses the suspicion, for example a wrong answer. '
                     'Choose separation when the source conclusion admits a situation the intended problem excludes because of a local error such as a misplaced parenthesis, implication or quantifier. '
                     'For separation give witnesses, a Lean binder list such as (x : ℝ) (f : ℕ → ℝ) declaring every free variable of the source conclusion and containing nothing else, '
                     'never values or explanations, and the smallest edit that corrects the error: '
@@ -68,7 +72,7 @@ def reader_messages(item, checks, advisory=None):
                     'Its edit_from is an exact substring of exactly one hypothesis type in signature and edit_to its corrected replacement, which may be True to remove the condition; witnesses must be null. '
                     'The harness quantifies over the non-hypothesis binders and tests that some instance satisfies the edited hypotheses but not the source hypotheses. '
                     'Separation drops the source hypotheses, so it shows a difference of logical form, not a property of the actual benchmark object; keep that obligation explicit. '
-                    'comparison must be null except for equivalence. witnesses must be null except for separation; edit_from and edit_to must be null except for separation and hypothesis_separation. '
+                    'comparison must be null except for equivalence. witnesses must be null except for separation; edit_from and edit_to must be null except for separation, hypothesis_separation and difference. '
                     'A proof of a true intended theorem alone is not defect evidence. For statement probes explain how a proof would use the suspected defect. '
                     'For equivalence supply a closed Lean proposition and retain an explicit translation-review obligation. '
                     'Do not invent Lean source, hypotheses, an official answer, or a confirmed finding. Model agreement is advisory. '
@@ -95,7 +99,9 @@ def declared_edit_kind(item, candidate):
     old, new = candidate.get('edit_from'), candidate.get('edit_to')
     if candidate.get('probe_kind') == 'hypothesis_separation':
         return edit_kind(old, new) if old and new is not None else 'rewrite'
-    if candidate.get('probe_kind') != 'separation':
+    if candidate.get('probe_kind') == 'difference' and old and old not in item.get('conclusion', ''):
+        return edit_kind(old, new) if new is not None else 'rewrite'
+    if candidate.get('probe_kind') not in ('separation', 'difference'):
         return None
     conclusion = item.get('conclusion', '')
     if not old or new is None or conclusion.count(old) != 1:
@@ -126,6 +132,39 @@ def hypothesis_target(item, candidate, signature):
     proposition = wrap(f'∃ {signature["witnesses"]}, {body}' if signature['witnesses'] else body, item['context']['opens'])
     edit = {'from': old, 'to': new, 'hypothesis': hypotheses[matches[0]]['names'], 'source_hypotheses': source,
             'intended': intended, 'kind': edit_kind(source, intended)}
+    return proposition, edit
+
+
+def difference_target(item, candidate, signature):
+    old, new = candidate.get('edit_from'), candidate.get('edit_to')
+    if signature is None or signature.get('status') != 'found':
+        raise ValueError('difference requires the parsed declaration signature')
+    if candidate.get('witnesses') is not None:
+        raise ValueError('difference derives its witnesses from the signature')
+    if not old or new is None or len(old) > 2000 or len(new) > len(old) + 200:
+        raise ValueError('difference requires a bounded edit')
+    if item['signature_source'].count(old) != 1:
+        raise ValueError('difference edit must match exactly one substring of the signature')
+    conclusion = item['conclusion']
+    if old in conclusion:
+        intended = conclusion.replace(old, new, 1)
+        source, part, names = conclusion, 'conclusion', None
+    else:
+        hypotheses = signature['hypotheses']
+        matches = [index for index, hypothesis in enumerate(hypotheses) if old in hypothesis['type']]
+        if len(matches) != 1:
+            raise ValueError('difference edit must lie inside the conclusion or inside one hypothesis type')
+        edited = [dict(hypothesis) for hypothesis in hypotheses]
+        edited[matches[0]]['type'] = hypotheses[matches[0]]['type'].replace(old, new, 1)
+        source = ' ∧ '.join(f'({hypothesis["type"]})' for hypothesis in hypotheses)
+        intended = ' ∧ '.join(f'({hypothesis["type"]})' for hypothesis in edited)
+        part, names = 'hypotheses', hypotheses[matches[0]]['names']
+    if intended == source:
+        raise ValueError('difference edit does not change the formula')
+    body = f'¬ (({source}) ↔ ({intended}))'
+    proposition = wrap(f'∃ {signature["witnesses"]}, {body}' if signature['witnesses'] else body, item['context']['opens'])
+    edit = {'from': old, 'to': new, 'part': part, 'hypothesis': names, 'source_formula': source, 'intended': intended,
+            'kind': declared_edit_kind(item, candidate)}
     return proposition, edit
 
 
@@ -164,6 +203,11 @@ def prepare_claim(item, candidate, index, signature=None):
         bridge = 'instance'
         transformations.append('drop the source conclusion; quantify over the declaration binders that other parts of the signature use, with Type* witnesses in Type')
         transformations.append('compare the conjunction of the source hypotheses with the same conjunction after one declared edit')
+    elif kind == 'difference':
+        proposition, edit = difference_target(item, candidate, signature)
+        bridge = 'schema'
+        transformations.append('keep only the edited formula, the conclusion or the conjunction of hypotheses; quantify over the declaration binders that other parts of the signature use, with Type* witnesses in Type')
+        transformations.append('test that the source formula and the formula after one declared edit disagree on some instance')
     elif kind == 'equivalence':
         if not candidate['comparison'] or len(candidate['comparison']) > 12000:
             raise ValueError('equivalence requires a bounded closed comparison proposition')
@@ -176,9 +220,9 @@ def prepare_claim(item, candidate, index, signature=None):
         raise ValueError('this template does not accept a comparison proposition')
     if kind != 'separation' and candidate.get('witnesses') is not None:
         raise ValueError('only separation accepts witness binders')
-    if kind not in ('separation', 'hypothesis_separation') and any(candidate.get(key) is not None for key in ('edit_from', 'edit_to')):
+    if kind not in ('separation', 'hypothesis_separation', 'difference') and any(candidate.get(key) is not None for key in ('edit_from', 'edit_to')):
         raise ValueError('only separation templates accept edits')
-    if kind in ('separation', 'hypothesis_separation') and candidate['comparison'] is not None:
+    if kind in ('separation', 'hypothesis_separation', 'difference') and candidate['comparison'] is not None:
         raise ValueError('separation builds its intended statement from the declared edit')
     obligation = candidate['obligation'] + ' A reviewer must establish that this formal proposition supports the stated discrepancy in the original problem.'
     if kind == 'separation':
@@ -190,11 +234,15 @@ def prepare_claim(item, candidate, index, signature=None):
         obligation += (' The source conclusion was dropped; the witnesses show only that the edited hypotheses admit an instance the source hypotheses exclude. '
                        'A reviewer must confirm that this instance is admissible in the original problem'
                        + ('.' if edit['kind'] in ('regrouping', 'reordering') else ' and that the edit adds or removes nothing else, since it changes content.'))
+    if kind == 'difference':
+        obligation += (f' Only the edited {edit["part"]} was kept; Lean evidence shows that the edit changes its meaning on some instance, not that the source is wrong. '
+                       'A reviewer must confirm that the edited text is the intended reading'
+                       + ('.' if edit['kind'] in ('regrouping', 'reordering', 'binder_move') else ' and check it closely, since the edit adds or removes content.'))
     claim = make_claim(item, f'{item["id"]}-{index}', proposition, candidate['prediction'], candidate['type'],
                        'source-bound formal probe; interpretation pending', bridge, obligation)
     claim.update(explanation=candidate['explanation'], location=candidate['location'], template_kind=kind,
                  transformations=transformations, candidate_fingerprint=fingerprint(candidate))
-    if kind in ('separation', 'hypothesis_separation'):
+    if kind in ('separation', 'hypothesis_separation', 'difference'):
         claim['edit'] = edit
     return claim
 
@@ -205,6 +253,7 @@ def writer_messages(item, claim, expected, previous=None, diagnostic=None):
                     'If the goal has outer forall binders, introduce them before proving the body. '
                     'For example, a quantified reflexive equality can use by intros; rfl. Put no explanation inside the proof. '
                     'Your proof is checked under the same open declarations as the expected proposition, so its short names resolve. '
+                    'For an existential goal, choose the simplest concrete values that work, such as small numbers, constant functions or empty sets, and prove the remaining facts directly. '
                     'If you cannot produce a complete proof, set proof to null and give a short abstain_reason; never put prose, partial proofs or sorry in proof. '
                     'When you do return a proof, set abstain_reason to null. Do not replace the target, introduce top-level commands, use sorry, custom axioms, native_decide, run_tac, unsafe code, or executable metaprogramming. '
                     'The available source support is rechecked separately. The original audited theorem is unavailable. '

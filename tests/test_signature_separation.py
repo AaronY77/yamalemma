@@ -53,6 +53,27 @@ class SignatureSeparationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             prepare_claim(SYNTHETIC, candidate(probe_kind='separation', witnesses='(G : Type)'), 1, SIGNATURE)
 
+    def test_difference_on_a_hypothesis_keeps_only_the_hypotheses(self):
+        claim = prepare_claim(SYNTHETIC, candidate(probe_kind='difference', edit_from='Odd (orderOf g)', edit_to='Even (orderOf g)',
+                                                   location='Odd (orderOf g)'), 1, SIGNATURE)
+        self.assertEqual(claim['proposition'],
+                         '∃ (G : Type) (_inst1 : Group G) (g h : G), ¬ (((closure {g, h} = ⊤ ∧ ¬closure {g} = ⊤) ∧ (Odd (orderOf g))) ↔ '
+                         '((closure {g, h} = ⊤ ∧ ¬closure {g} = ⊤) ∧ (Even (orderOf g))))')
+        self.assertEqual(claim['edit']['part'], 'hypotheses')
+        self.assertEqual(claim['bridges'][0]['type'], 'schema')
+        self.assertIn('not that the source is wrong', claim['bridges'][0]['obligation'])
+
+    def test_difference_on_the_conclusion_drops_the_hypotheses(self):
+        claim = prepare_claim(SYNTHETIC, candidate(probe_kind='difference', edit_from='P x g', edit_to='P g x', location='P x g'), 1, SIGNATURE)
+        self.assertTrue(claim['proposition'].endswith('¬ ((∀ x : G, P x g) ↔ (∀ x : G, P g x))'))
+        self.assertEqual(claim['edit']['part'], 'conclusion')
+        self.assertEqual(claim['edit']['kind'], 'reordering')
+
+    def test_difference_rejects_witnesses_and_edits_outside_formulas(self):
+        for fields in ({'witnesses': '(G : Type)'}, {'edit_from': '(G : Type*)', 'edit_to': '(G : Type)'}, {'edit_from': 'Q', 'edit_to': 'R'}):
+            with self.assertRaises(ValueError):
+                prepare_claim(SYNTHETIC, candidate(probe_kind='difference', location='godd', **fields), 1, SIGNATURE)
+
     def test_quantifying_over_a_theorem_binder_is_a_binder_move(self):
         item = {'binders': '(n : ℕ)\n  (x : Fin n → ℝ)', 'conclusion': '∃ N, P N ∧ Q x'}
         self.assertTrue(binder_move(item, 'Q x', '∀ x : Fin n → ℝ, Q x'))

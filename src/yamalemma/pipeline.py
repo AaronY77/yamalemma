@@ -117,7 +117,7 @@ def audit_item(worker, client, item, config, directory, protocol=None):
         result['claims_omitted_by_limit'] = max(0, len(candidates) - config['limits']['max_claims'])
         signature = None
         for index, candidate in enumerate(candidates[:config['limits']['max_claims']], 1):
-            if candidate.get('probe_kind') == 'hypothesis_separation' and signature is None:
+            if candidate.get('probe_kind') in ('hypothesis_separation', 'difference') and signature is None:
                 signature = hypothesis_signature(worker, item)
                 result['signature'] = signature
             try:
