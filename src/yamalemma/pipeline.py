@@ -3,10 +3,10 @@ from pathlib import Path
 
 from yamalemma.adjudicate import adjudicate
 from yamalemma.domain import fingerprint, file_hash, make_probe, save_json
-from yamalemma.harness import BLOCKED, check_probe, environment_record, validate_item
+from yamalemma.harness import BLOCKED, check_probe, environment_record, render_target, validate_item
 from yamalemma.models import ModelClient
 from yamalemma.precheck import precheck
-from yamalemma.prompts import (PROMPT_VERSION, READER_SCHEMA, PROOF_SCHEMA, BACKTRANSLATION_SCHEMA, COMPARISON_SCHEMA,
+from yamalemma.prompts import (PROMPT_VERSION, READER_SCHEMA, WRITER_SCHEMA, BACKTRANSLATION_SCHEMA, COMPARISON_SCHEMA,
                                backtranslation_messages, reader_messages, writer_messages, prepare_claim, messages)
 from yamalemma.report import write_report
 from yamalemma.storage import ArtifactStore
@@ -19,24 +19,30 @@ def first_error(evidence):
 
 
 def prove_claim(worker, client, item, claim, binding, directory, repairs=3):
-    attempts, model_calls = [], []
+    attempts, model_calls, abstentions = [], [], []
     store = ArtifactStore(Path(directory) / 'artifacts')
     for polarity in ('confirm', 'refute'):
         previous, diagnostic = None, None
         for attempt in range(repairs + 1):
             expected = claim['proposition'] if polarity == 'confirm' else f'Not ({claim["proposition"]})'
             call = client.complete('writer', 'proof', writer_messages(item, claim, expected, previous, diagnostic),
-                                   PROOF_SCHEMA, dict(binding, claim=fingerprint(claim), polarity=polarity, attempt=attempt))
+                                   WRITER_SCHEMA, dict(binding, claim=fingerprint(claim), polarity=polarity, attempt=attempt))
             model_calls.append(call)
             if call['status'] != 'completed':
                 break
-            previous = call['data']['proof']
+            proof = call['data'].get('proof')
+            if not proof or not proof.strip():
+                abstentions.append({'polarity': polarity, 'attempt': attempt,
+                                    'reason': (call['data'].get('abstain_reason') or 'no proof returned')[:2000]})
+                break
+            previous = proof
             probe = make_probe(claim, polarity, previous)
             try:
                 evidence = check_probe(worker, item, claim, probe, store)
             except (WorkerError, OSError, TimeoutError) as error:
                 verdict = adjudicate(claim, attempts)
                 verdict['infrastructure_error'] = str(error)[:2000]
+                verdict['writer_abstentions'] = abstentions
                 write_report(Path(directory), item, claim, attempts, verdict)
                 save_json(Path(directory) / 'model_calls.json', model_calls)
                 return attempts, model_calls, verdict
@@ -45,6 +51,7 @@ def prove_claim(worker, client, item, claim, binding, directory, repairs=3):
                 break
             diagnostic = first_error(evidence)
     verdict = adjudicate(claim, attempts)
+    verdict['writer_abstentions'] = abstentions
     write_report(Path(directory), item, claim, attempts, verdict)
     save_json(Path(directory) / 'model_calls.json', model_calls)
     return attempts, model_calls, verdict
@@ -102,6 +109,11 @@ def audit_item(worker, client, item, config, directory, protocol=None):
                 claim = prepare_claim(item, candidate, index)
             except ValueError as error:
                 result['rejected_candidates'].append({'candidate': candidate, 'reason': str(error)})
+                continue
+            rendering = render_target(worker, item, claim['proposition'])
+            if rendering.get('status') != 'rendered':
+                reason = str(rendering.get('error') or rendering.get('status'))[:1000]
+                result['rejected_candidates'].append({'candidate': candidate, 'reason': f'target does not elaborate: {reason}'})
                 continue
             claim_directory = directory / f'claim-{index:02d}'
             if config['stages']['triage']:

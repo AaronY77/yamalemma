@@ -1,0 +1,96 @@
+{
+  "item_id": "S09",
+  "item": {
+    "schema_version": 1,
+    "id": "S09",
+    "origin": "putnam_2023_a6.lean",
+    "benchmark_commit": null,
+    "snapshot_kind": "supplied-source",
+    "source_sha256": "dddc9b82d4c639fff3f414c5f335c0ed36dea0bf92b9a4da0aeed602b22583a7",
+    "raw_source": "import Mathlib\nopen Finset\n\nabbrev S09_solution : Set ℕ := sorry\n/--\nAlice and Bob play a game in which they take turns choosing integers from $1$ to $n$. Before any integers are chosen, Bob selects a goal of 'odd' or 'even'. On the first turn, Alice chooses one of the $n$ integers. On the second turn, Bob chooses one of the remaining integers. They continue alternately choosing one of the integers that has not yet been chosen, until the $n$th turn, which is forced and ends the game. Bob wins if the parity of $\\{k : \\mbox{the number $k$ was chosen on the $k$th turn}\\}$ matches his goal. For which values of $n$ does Bob have a winning strategy?\n-/\ntheorem S09\n    (IsValidGame : List ℕ → Prop)\n    (IsValidGame_def : ∀ g, IsValidGame g ↔ g.Nodup ∧ (∀ i ∈ g, i ∈ Icc 1 g.length))\n    (parityOf : List ℕ → ZMod 2)\n    (parityOf_def : ∀ g, parityOf g = ((range g.length).filter fun i ↦ g[i]! = i + 1).card)\n    (ConformsToStrategy : List ℕ → (List ℕ → ℕ) → Prop)\n    (ConformsToStrategy_def : ∀ g s, ConformsToStrategy g s ↔\n      ∀ (i) (h : i < g.length), Odd i → g[i] = s (g.take i))\n    (IsValidStrategy : (List ℕ → ℕ) → Prop)\n    (IsValidStrategy_def : ∀ s, IsValidStrategy s ↔\n      ∀ (g : List ℕ), g.length > 0 → s g ∈ g)\n    (IsWinningFor : ℕ → (List ℕ → ℕ) → Prop)\n    (IsWinningFor_def : ∀ n s, IsWinningFor n s ↔\n      IsValidStrategy s ∧ ∃ p, ∀ g, g.length = n → IsValidGame g → ConformsToStrategy g s → parityOf g = p) :\n    {n : ℕ | 0 < n ∧ ∃ s, IsWinningFor n s} = S09_solution :=\n  sorry\n",
+    "span": {
+      "start_byte": 657,
+      "end_byte": 1606
+    },
+    "declaration_source": "theorem S09\n    (IsValidGame : List ℕ → Prop)\n    (IsValidGame_def : ∀ g, IsValidGame g ↔ g.Nodup ∧ (∀ i ∈ g, i ∈ Icc 1 g.length))\n    (parityOf : List ℕ → ZMod 2)\n    (parityOf_def : ∀ g, parityOf g = ((range g.length).filter fun i ↦ g[i]! = i + 1).card)\n    (ConformsToStrategy : List ℕ → (List ℕ → ℕ) → Prop)\n    (ConformsToStrategy_def : ∀ g s, ConformsToStrategy g s ↔\n      ∀ (i) (h : i < g.length), Odd i → g[i] = s (g.take i))\n    (IsValidStrategy : (List ℕ → ℕ) → Prop)\n    (IsValidStrategy_def : ∀ s, IsValidStrategy s ↔\n      ∀ (g : List ℕ), g.length > 0 → s g ∈ g)\n    (IsWinningFor : ℕ → (List ℕ → ℕ) → Prop)\n    (IsWinningFor_def : ∀ n s, IsWinningFor n s ↔\n      IsValidStrategy s ∧ ∃ p, ∀ g, g.length = n → IsValidGame g → ConformsToStrategy g s → parityOf g = p) :\n    {n : ℕ | 0 < n ∧ ∃ s, IsWinningFor n s} = S09_solution :=\n  sorry",
+    "signature_source": "(IsValidGame : List ℕ → Prop)\n    (IsValidGame_def : ∀ g, IsValidGame g ↔ g.Nodup ∧ (∀ i ∈ g, i ∈ Icc 1 g.length))\n    (parityOf : List ℕ → ZMod 2)\n    (parityOf_def : ∀ g, parityOf g = ((range g.length).filter fun i ↦ g[i]! = i + 1).card)\n    (ConformsToStrategy : List ℕ → (List ℕ → ℕ) → Prop)\n    (ConformsToStrategy_def : ∀ g s, ConformsToStrategy g s ↔\n      ∀ (i) (h : i < g.length), Odd i → g[i] = s (g.take i))\n    (IsValidStrategy : (List ℕ → ℕ) → Prop)\n    (IsValidStrategy_def : ∀ s, IsValidStrategy s ↔\n      ∀ (g : List ℕ), g.length > 0 → s g ∈ g)\n    (IsWinningFor : ℕ → (List ℕ → ℕ) → Prop)\n    (IsWinningFor_def : ∀ n s, IsWinningFor n s ↔\n      IsValidStrategy s ∧ ∃ p, ∀ g, g.length = n → IsValidGame g → ConformsToStrategy g s → parityOf g = p) :\n    {n : ℕ | 0 < n ∧ ∃ s, IsWinningFor n s} = S09_solution",
+    "imports": [
+      "Mathlib"
+    ],
+    "informal": "Alice and Bob play a game in which they take turns choosing integers from $1$ to $n$. Before any integers are chosen, Bob selects a goal of 'odd' or 'even'. On the first turn, Alice chooses one of the $n$ integers. On the second turn, Bob chooses one of the remaining integers. They continue alternately choosing one of the integers that has not yet been chosen, until the $n$th turn, which is forced and ends the game. Bob wins if the parity of $\\{k : \\mbox{the number $k$ was chosen on the $k$th turn}\\}$ matches his goal. For which values of $n$ does Bob have a winning strategy?",
+    "docstring": "/--\nAlice and Bob play a game in which they take turns choosing integers from $1$ to $n$. Before any integers are chosen, Bob selects a goal of 'odd' or 'even'. On the first turn, Alice chooses one of the $n$ integers. On the second turn, Bob chooses one of the remaining integers. They continue alternately choosing one of the integers that has not yet been chosen, until the $n$th turn, which is forced and ends the game. Bob wins if the parity of $\\{k : \\mbox{the number $k$ was chosen on the $k$th turn}\\}$ matches his goal. For which values of $n$ does Bob have a winning strategy?\n-/",
+    "binders": "(IsValidGame : List ℕ → Prop)\n    (IsValidGame_def : ∀ g, IsValidGame g ↔ g.Nodup ∧ (∀ i ∈ g, i ∈ Icc 1 g.length))\n    (parityOf : List ℕ → ZMod 2)\n    (parityOf_def : ∀ g, parityOf g = ((range g.length).filter fun i ↦ g[i]! = i + 1).card)\n    (ConformsToStrategy : List ℕ → (List ℕ → ℕ) → Prop)\n    (ConformsToStrategy_def : ∀ g s, ConformsToStrategy g s ↔\n      ∀ (i) (h : i < g.length), Odd i → g[i] = s (g.take i))\n    (IsValidStrategy : (List ℕ → ℕ) → Prop)\n    (IsValidStrategy_def : ∀ s, IsValidStrategy s ↔\n      ∀ (g : List ℕ), g.length > 0 → s g ∈ g)\n    (IsWinningFor : ℕ → (List ℕ → ℕ) → Prop)\n    (IsWinningFor_def : ∀ n s, IsWinningFor n s ↔\n      IsValidStrategy s ∧ ∃ p, ∀ g, g.length = n → IsValidGame g → ConformsToStrategy g s → parityOf g = p)",
+    "conclusion": "{n : ℕ | 0 < n ∧ ∃ s, IsWinningFor n s} = S09_solution",
+    "expected_type": "open Finset in\n∀ (IsValidGame : List ℕ → Prop)\n    (IsValidGame_def : ∀ g, IsValidGame g ↔ g.Nodup ∧ (∀ i ∈ g, i ∈ Icc 1 g.length))\n    (parityOf : List ℕ → ZMod 2)\n    (parityOf_def : ∀ g, parityOf g = ((range g.length).filter fun i ↦ g[i]! = i + 1).card)\n    (ConformsToStrategy : List ℕ → (List ℕ → ℕ) → Prop)\n    (ConformsToStrategy_def : ∀ g s, ConformsToStrategy g s ↔\n      ∀ (i) (h : i < g.length), Odd i → g[i] = s (g.take i))\n    (IsValidStrategy : (List ℕ → ℕ) → Prop)\n    (IsValidStrategy_def : ∀ s, IsValidStrategy s ↔\n      ∀ (g : List ℕ), g.length > 0 → s g ∈ g)\n    (IsWinningFor : ℕ → (List ℕ → ℕ) → Prop)\n    (IsWinningFor_def : ∀ n s, IsWinningFor n s ↔\n      IsValidStrategy s ∧ ∃ p, ∀ g, g.length = n → IsValidGame g → ConformsToStrategy g s → parityOf g = p), {n : ℕ | 0 < n ∧ ∃ s, IsWinningFor n s} = S09_solution",
+    "proof": "@(open Finset in\n@(fun (IsValidGame : List ℕ → Prop)\n    (IsValidGame_def : ∀ g, IsValidGame g ↔ g.Nodup ∧ (∀ i ∈ g, i ∈ Icc 1 g.length))\n    (parityOf : List ℕ → ZMod 2)\n    (parityOf_def : ∀ g, parityOf g = ((range g.length).filter fun i ↦ g[i]! = i + 1).card)\n    (ConformsToStrategy : List ℕ → (List ℕ → ℕ) → Prop)\n    (ConformsToStrategy_def : ∀ g s, ConformsToStrategy g s ↔\n      ∀ (i) (h : i < g.length), Odd i → g[i] = s (g.take i))\n    (IsValidStrategy : (List ℕ → ℕ) → Prop)\n    (IsValidStrategy_def : ∀ s, IsValidStrategy s ↔\n      ∀ (g : List ℕ), g.length > 0 → s g ∈ g)\n    (IsWinningFor : ℕ → (List ℕ → ℕ) → Prop)\n    (IsWinningFor_def : ∀ n s, IsWinningFor n s ↔\n      IsValidStrategy s ∧ ∃ p, ∀ g, g.length = n → IsValidGame g → ConformsToStrategy g s → parityOf g = p) =>\nsorry))",
+    "context": {
+      "opens": [
+        "open Finset"
+      ],
+      "declarations": [
+        {
+          "name": "S09_solution",
+          "namespace": "",
+          "type": "open Finset in\nSet ℕ",
+          "value": "@(open Finset in\n@(sorry))",
+          "scopes": [
+            "Finset"
+          ]
+        }
+      ],
+      "namespace": "",
+      "scopes": [
+        "Finset"
+      ]
+    },
+    "proof_syntax": [
+      "Lean.Parser.Term.sorry",
+      "sorry"
+    ],
+    "transformations": [
+      "close theorem binders; infer proof-binder universe placeholders from the fixed expected type",
+      "recheck referenced supporting declarations in source order",
+      "parse normalized line endings with original UTF-8 byte coordinates"
+    ],
+    "unsupported": [
+      "answer or context definition contains an admitted placeholder"
+    ],
+    "environment": {
+      "toolchain": "leanprover/lean4:v4.35.0",
+      "manifest_sha256": "c7080a3938b536b821c383201a984d3fe5ff32461f0d9e4e4160ecc9739d9833"
+    },
+    "fingerprint": "03a6217076e4c9d4f2c407d339c950bfd990c94955a16df0357707b9833ec92a"
+  },
+  "item_fingerprint": "03a6217076e4c9d4f2c407d339c950bfd990c94955a16df0357707b9833ec92a",
+  "status": "unsupported_source",
+  "reader_claims": [],
+  "claims": [],
+  "rejected_candidates": [],
+  "advisory": null,
+  "finding_status": "unconfirmed",
+  "prompt_version": "audit-prompts-v3",
+  "config_fingerprint": "c7214a67e03489f619f2f4f1fba54483580a67202d027e5a176786627ebfcf48",
+  "protocol_fingerprint": null,
+  "prechecks": {
+    "item_id": "S09",
+    "item_fingerprint": "03a6217076e4c9d4f2c407d339c950bfd990c94955a16df0357707b9833ec92a",
+    "hints": [
+      {
+        "kind": "natural_arithmetic_review",
+        "status": "advisory"
+      }
+    ],
+    "status": "unresolved",
+    "reasons": [
+      "answer or context definition contains an admitted placeholder"
+    ]
+  },
+  "reasons": [
+    "answer or context definition contains an admitted placeholder"
+  ],
+  "model_calls": [],
+  "elapsed_seconds": 0.0002966190004372038,
+  "new_cost_usd": 0,
+  "unknown_cost_calls": 0,
+  "hash": "b84b687e9b26c03a0cc6b621d95ef512d4763810feb74531d33e95a97061d038"
+}

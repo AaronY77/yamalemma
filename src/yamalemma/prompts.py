@@ -1,10 +1,11 @@
 import json
+import re
 
 from yamalemma.domain import BRIDGES, CLAIM_TYPES, fingerprint, make_claim
 from yamalemma.ingest import wrap
 
 
-PROMPT_VERSION = 'audit-prompts-v3'
+PROMPT_VERSION = 'audit-prompts-v8'
 
 
 def object_schema(fields):
@@ -15,12 +16,17 @@ TEXT = {'type': 'string', 'minLength': 1, 'maxLength': 12000}
 CLAIM_SCHEMA = object_schema({
     'type': {'type': 'string', 'enum': sorted(CLAIM_TYPES)}, 'location': TEXT,
     'explanation': TEXT, 'prediction': TEXT,
-    'probe_kind': {'type': 'string', 'enum': ['statement', 'negated_statement', 'vacuity', 'equivalence']},
+    'probe_kind': {'type': 'string', 'enum': ['statement', 'negated_statement', 'vacuity', 'equivalence', 'separation']},
     'comparison': {'type': ['string', 'null']},
+    'witnesses': {'type': ['string', 'null']},
+    'edit_from': {'type': ['string', 'null']},
+    'edit_to': {'type': ['string', 'null']},
     'bridge': {'type': 'string', 'enum': sorted(BRIDGES)}, 'obligation': TEXT,
 })
 READER_SCHEMA = object_schema({'claims': {'type': 'array', 'items': CLAIM_SCHEMA, 'maxItems': 20}, 'summary': TEXT})
 PROOF_SCHEMA = object_schema({'proof': TEXT})
+WRITER_SCHEMA = object_schema({'proof': {'type': ['string', 'null'], 'maxLength': 12000},
+                               'abstain_reason': {'type': ['string', 'null'], 'maxLength': 2000}})
 BACKTRANSLATION_SCHEMA = object_schema({'paraphrase': TEXT})
 COMPARISON_SCHEMA = object_schema({'differences': {'type': 'array', 'items': TEXT, 'maxItems': 10}})
 FIX_SCHEMA = object_schema({'statement': TEXT, 'explanation': TEXT,
@@ -50,12 +56,27 @@ def reader_messages(item, checks, advisory=None):
     instructions = ('Compare the informal problem with the exact Lean proposition. Return only testable discrepancy suspicions, or an empty claims list. '
                     'A suspicion is not a confirmed defect. location must be an exact nonempty substring of signature. '
                     'Choose statement to test provability of the original proposition, negated_statement for its negation, vacuity to test False under the declaration binders, '
-                    'or equivalence to compare the entire original proposition with comparison. comparison must be null except for equivalence. '
+                    'or equivalence to compare the entire original proposition with comparison. '
+                    'Choose separation when the source conclusion admits a situation the intended problem excludes because of a local error such as a misplaced parenthesis, implication or quantifier. '
+                    'For separation give witnesses, a Lean binder list such as (x : ℝ) (f : ℕ → ℝ) declaring every free variable of the source conclusion and containing nothing else, '
+                    'never values or explanations, and the smallest edit that corrects the error: '
+                    'edit_from is an exact substring occurring once in the source conclusion and edit_to is its corrected replacement. '
+                    'The harness builds the intended statement by applying only that edit, then tests that some witnesses satisfy the exact source conclusion but not the edited one. '
+                    'Do not change anything else; a separation that does not come from the edited text is not evidence of the error. '
+                    'Separation drops the source hypotheses, so it shows a difference of logical form, not a property of the actual benchmark object; keep that obligation explicit. '
+                    'comparison must be null except for equivalence. witnesses, edit_from and edit_to must be null except for separation. '
                     'A proof of a true intended theorem alone is not defect evidence. For statement probes explain how a proof would use the suspected defect. '
                     'For equivalence supply a closed Lean proposition and retain an explicit translation-review obligation. '
                     'Do not invent Lean source, hypotheses, an official answer, or a confirmed finding. Model agreement is advisory. '
                     'Schema counterexamples and selected instances have limited scope. Include the remaining interpretation obligation for each claim.')
     return messages(instructions, payload)
+
+
+def edit_kind(before, after):
+    if re.sub(r'[\s()]', '', before) == re.sub(r'[\s()]', '', after):
+        return 'regrouping'
+    tokens = [sorted(re.findall(r'[^\W_]+|_|[^\w\s()]', text)) for text in (before, after)]
+    return 'reordering' if tokens[0] == tokens[1] else 'rewrite'
 
 
 def prepare_claim(item, candidate, index):
@@ -73,6 +94,21 @@ def prepare_claim(item, candidate, index):
         binders = item['binders']
         proposition = wrap(f'∀ {binders}, False' if binders else 'False', item['context']['opens'])
         transformations.append('replace the conclusion with False; preserve declaration binders')
+    elif kind == 'separation':
+        witnesses, old, new = candidate.get('witnesses'), candidate.get('edit_from'), candidate.get('edit_to')
+        conclusion = item['conclusion']
+        if not witnesses or not old or new is None or len(witnesses) > 4000 or len(old) > 2000 or len(new) > len(old) + 200:
+            raise ValueError('separation requires bounded witness binders and a bounded edit')
+        if conclusion.count(old) != 1:
+            raise ValueError('separation edit must match exactly one substring of the source conclusion')
+        intended = conclusion.replace(old, new, 1)
+        if intended == conclusion:
+            raise ValueError('separation edit does not change the source conclusion')
+        proposition = wrap(f'∃ {witnesses}, ({conclusion}) ∧ ¬ ({intended})', item['context']['opens'])
+        bridge = 'schema'
+        edit = {'from': old, 'to': new, 'intended': intended, 'kind': edit_kind(conclusion, intended)}
+        transformations.append('keep the exact source conclusion; replace the declaration binders and hypotheses with model-chosen witnesses')
+        transformations.append('compare with the source conclusion after one declared edit')
     elif kind == 'equivalence':
         if not candidate['comparison'] or len(candidate['comparison']) > 12000:
             raise ValueError('equivalence requires a bounded closed comparison proposition')
@@ -81,13 +117,23 @@ def prepare_claim(item, candidate, index):
         transformations.append('compare the exact source proposition with a model-proposed reading')
     else:
         raise ValueError('unsupported probe template')
-    if kind != 'equivalence' and candidate['comparison'] is not None:
+    if kind not in ('equivalence', 'separation') and candidate['comparison'] is not None:
         raise ValueError('this template does not accept a comparison proposition')
+    if kind != 'separation' and any(candidate.get(key) is not None for key in ('witnesses', 'edit_from', 'edit_to')):
+        raise ValueError('only separation accepts witness binders and edits')
+    if kind == 'separation' and candidate['comparison'] is not None:
+        raise ValueError('separation builds its intended statement from the declared edit')
     obligation = candidate['obligation'] + ' A reviewer must establish that this formal proposition supports the stated discrepancy in the original problem.'
+    if kind == 'separation':
+        obligation += {'regrouping': ' The source hypotheses were dropped; the edit only regroups the source text, and a reviewer must confirm the regrouped statement expresses the original problem.',
+                       'reordering': ' The source hypotheses were dropped; the edit reorders source tokens without adding or removing any, and a reviewer must confirm the reordered statement expresses the original problem.',
+                       'rewrite': ' The source hypotheses were dropped and the edit adds or removes content; the separation may come from the rewrite rather than the suspected error, so a reviewer must check the edited statement closely.'}[edit['kind']]
     claim = make_claim(item, f'{item["id"]}-{index}', proposition, candidate['prediction'], candidate['type'],
                        'source-bound formal probe; interpretation pending', bridge, obligation)
     claim.update(explanation=candidate['explanation'], location=candidate['location'], template_kind=kind,
                  transformations=transformations, candidate_fingerprint=fingerprint(candidate))
+    if kind == 'separation':
+        claim['edit'] = edit
     return claim
 
 
@@ -96,7 +142,9 @@ def writer_messages(item, claim, expected, previous=None, diagnostic=None):
                     'Use the shortest proof you can. A tactic proof must start with by; bare exact or intro is not a proof term. '
                     'If the goal has outer forall binders, introduce them before proving the body. '
                     'For example, a quantified reflexive equality can use by intros; rfl. Put no explanation inside the proof. '
-                    'Return only the proof field. Do not replace the target, introduce top-level commands, use sorry, custom axioms, native_decide, run_tac, unsafe code, or executable metaprogramming. '
+                    'Your proof is checked under the same open declarations as the expected proposition, so its short names resolve. '
+                    'If you cannot produce a complete proof, set proof to null and give a short abstain_reason; never put prose, partial proofs or sorry in proof. '
+                    'When you do return a proof, set abstain_reason to null. Do not replace the target, introduce top-level commands, use sorry, custom axioms, native_decide, run_tac, unsafe code, or executable metaprogramming. '
                     'The available source support is rechecked separately. The original audited theorem is unavailable. '
                     'Only propext, Classical.choice and Quot.sound are allowed. Proving this proposition does not certify its informal interpretation.')
     return messages(instructions, {'expected': expected, 'namespace': item['context']['namespace'],

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def candidate():
     return {'type': 'vacuous', 'location': 'n < 0', 'explanation': 'Impossible natural-number assumption.',
-            'prediction': 'The declaration assumptions imply False.', 'probe_kind': 'vacuity', 'comparison': None,
+            'prediction': 'The declaration assumptions imply False.', 'probe_kind': 'vacuity', 'comparison': None, 'witnesses': None, 'edit_from': None, 'edit_to': None,
             'bridge': 'intrinsic', 'obligation': 'Review whether the original problem permits these inputs.'}
 
 
@@ -48,7 +48,7 @@ class PipelineTests(unittest.TestCase):
             polarity = 'refute' if payload['expected'].startswith('Not (') else 'confirm'
             counts[polarity] += 1
             proof = 'by omega' if polarity == 'confirm' and counts[polarity] > 1 else 'by rfl'
-            return response({'proof': proof})
+            return response({'proof': proof, 'abstain_reason': None})
         with tempfile.TemporaryDirectory() as directory:
             client = ModelClient(config, Path(directory) / 'models', transport=transport)
             result = audit_item(self.worker, client, self.item, config, Path(directory) / 'audit')
@@ -133,7 +133,7 @@ class PipelineTests(unittest.TestCase):
             if 'claims' in body['format']['properties']:
                 return response({'claims': [candidate()], 'summary': 'test'})
             payload = json.loads(body['messages'][1]['content'])
-            return response({'proof': 'by rfl' if payload['expected'].startswith('Not (') else 'by omega'})
+            return response({'proof': 'by rfl' if payload['expected'].startswith('Not (') else 'by omega', 'abstain_reason': None})
         with tempfile.TemporaryDirectory() as directory:
             result = audit_item(self.worker, ModelClient(config, Path(directory) / 'models', transport=transport), self.item, config, Path(directory) / 'audit')
             claim = result['claims'][0]['claim']

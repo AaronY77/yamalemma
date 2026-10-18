@@ -84,7 +84,7 @@ def score(protocol, reports, configuration, config, judgments=None):
     checked, unresolved, total_claims, internal_errors = 0, 0, 0, 0
     by_bridge, costs, unknown_costs, seconds = {}, 0.0, 0, 0.0
     reviewed_confirmed, correct_confirmed, reviewed_direction, correct_direction = 0, 0, 0, 0
-    proof_attempts, claims_with_attempts, model_calls, reused_calls = 0, 0, 0, 0
+    proof_attempts, claims_with_attempts, model_calls, reused_calls, abstentions = 0, 0, 0, 0, 0
     for key, report in found.items():
         if report['reader_claims'] and key in known_defects:
             reader_hits.add(key)
@@ -98,6 +98,7 @@ def score(protocol, reports, configuration, config, judgments=None):
             proof_attempts += len(claim.get('evidence', []))
             claims_with_attempts += bool(claim.get('evidence'))
             verdict = claim['adjudication']
+            abstentions += len(verdict.get('writer_abstentions', []))
             formal = verdict.get('evidence_verdict', 'UNRESOLVED')
             checked += formal == 'EVIDENCE-CHECKED'
             unresolved += formal == 'UNRESOLVED'
@@ -135,6 +136,7 @@ def score(protocol, reports, configuration, config, judgments=None):
             'meaning_judgments': len(reviewed), 'reviewed_confirmed_claims': reviewed_confirmed,
             'reviewed_confirmed_claim_precision': ratio(correct_confirmed, reviewed_confirmed),
             'formal_attempt_coverage': ratio(claims_with_attempts, total_claims), 'proof_attempts': proof_attempts,
+            'writer_abstentions': abstentions,
             'model_calls': model_calls, 'reused_model_calls': reused_calls,
             'no_claim_items': sum(report.get('no_claim_detected', False) for report in found.values()),
             'incomplete_reader_items': sum(report['status'] != 'reviewed' for report in found.values()),

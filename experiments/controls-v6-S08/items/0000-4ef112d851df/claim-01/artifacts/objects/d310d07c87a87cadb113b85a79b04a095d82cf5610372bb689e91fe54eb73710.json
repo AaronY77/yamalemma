@@ -1,0 +1,49 @@
+{
+  "claim_fingerprint": "f5ec3b7310b4db6e0badd2ed368afdaff3a5fecfb7ea94c50f5599939c3f09d5",
+  "item_fingerprint": "3c4f992625fa5d2234b66442a8cee29223315b02d6ca4d64df744053554d0752",
+  "polarity": "confirm",
+  "expected": "open Set Function Filter Topology Polynomial Real in\n∃ (T : Set ℝ) (S : ℝ → ℕ → ℝ) (g : ℝ → ℝ), (∀ x ∈ T, (∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n(∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T) ∧ ¬ ((∀ x ∈ T, ∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n((∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T))",
+  "probe": {
+    "schema_version": 1,
+    "claim_fingerprint": "f5ec3b7310b4db6e0badd2ed368afdaff3a5fecfb7ea94c50f5599939c3f09d5",
+    "item_fingerprint": "3c4f992625fa5d2234b66442a8cee29223315b02d6ca4d64df744053554d0752",
+    "polarity": "confirm",
+    "template": "proposition-v1",
+    "expected": "open Set Function Filter Topology Polynomial Real in\n∃ (T : Set ℝ) (S : ℝ → ℕ → ℝ) (g : ℝ → ℝ), (∀ x ∈ T, (∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n(∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T) ∧ ¬ ((∀ x ∈ T, ∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n((∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T))",
+    "proof": "by\n  have hdiv : ¬ ∃ L : ℝ, Filter.Tendsto (fun n : ℕ => (n : ℝ)) Filter.atTop (𝓝 L) := by\n    rintro ⟨L, h⟩\n    have hlt : ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) < L + 1 :=\n      h.eventually (Filter.eventually_lt_nhds (by linarith))\n    have ht : Filter.Tendsto (fun n : ℕ => (n : ℝ)) Filter.atTop Filter.atTop := by\n      first\n      | exact Filter.tendsto_natCast_atTop_atTop\n      | exact tendsto_natCast_atTop_atTop\n    have hge : ∀ᶠ n : ℕ in Filter.atTop, L + 1 ≤ (n : ℝ) :=\n      ht.eventually (Filter.eventually_ge_atTop _)\n    obtain ⟨n, hn, hn'⟩ := (hlt.and hge).exists\n    exact (not_lt_of_ge hn') hn\n  refine ⟨{0}, (fun _ n => (n : ℝ)), (fun _ => 0), ?_, ?_⟩\n  · intro x hx h\n    exact (hdiv h.1).elim\n  · rintro ⟨h, _⟩\n    exact hdiv (h 0 (by simp))"
+  },
+  "environment": {
+    "lean-toolchain": "ead308ab4fc749eb2389819903fd7baa11bf06e490827f6896a8cbfe622fa703",
+    "lakefile.toml": "d832460e9ad6316bc5ab3c5ed7da3f725ad6c53833d7ddb73d004446023f8239",
+    "lake-manifest.json": "c7080a3938b536b821c383201a984d3fe5ff32461f0d9e4e4160ecc9739d9833",
+    "Yamalemma/Worker.lean": "103da5486fe5ee50ef8c68c474d88db05c161a48918b450667992e93d2002449",
+    "policy": "kernel-type-and-axioms-v1",
+    "toolchain": "leanprover/lean4:v4.35.0",
+    "implementation": {
+      "harness.py": "88a5efe8d76f9049bbc0c0f936463257688611d94b2fb664067973804ccbbdf9",
+      "worker.py": "41d257a82fffdbdd24c517589ad73ae6bc2f7bac8b4c943ce07f5d499241f718",
+      "ingest.py": "afb6af91e58dc35192083ac3706d578a3e3765c5a0daf10c9bba179f0efe06e8",
+      "domain.py": "643e19c7901c95e14d722ef91708bbae1fad762be16ab7e55587b056ec536abb",
+      "axiom_policy.py": "e3fbbeac5a6adf38e22654720d405f1dd312d033ea69f61910833715beccc0c1",
+      "adjudicate.py": "cf1840c7de0fa32088130d01ba81fb72c2ab90ad975ba62128280a785fa724ef",
+      "templates.py": "c7fca2269d340a11004443121fb833d56f423c82d72146564c3624692442b5bb",
+      "precheck.py": "dbe37a3507496769fab44c6f7ad4853c44397f6d1827e39a1b14c006a4c32a86",
+      "report.py": "9ff729c9c182e28ac4249ac0477599138f8e7c93bfdcd8f1667711fd8e752394",
+      "storage.py": "c78fb13bb2a4a864916afdd28298f78701c44e13b82de1aedfcbb4b9dc9849b7",
+      "proof_syntax.json": "8c24e7dc856124a2b5794235768c331a10eb7fdb1b95e2d42fba02f8498a31e1"
+    },
+    "fingerprint": "8e10e1cf79fd2863ceb1ab1fc6e5e225c00a66c1607c736c290d880bbbf88588"
+  },
+  "scope": "source-bound formal probe; interpretation pending",
+  "accepted": false,
+  "type_matches": false,
+  "axiom_policy": "unreadable",
+  "attempt": {
+    "status": "failure",
+    "error": "probe.lean:1:213: error(lean.unknownIdentifier): Unknown constant `Filter.eventually_lt_nhds`\n",
+    "elapsed_seconds": 0.058528446999844164,
+    "worker_generation": 1
+  },
+  "reason": "probe.lean:1:213: error(lean.unknownIdentifier): Unknown constant `Filter.eventually_lt_nhds`\n",
+  "id": "7cab79973a698d0ffe0e280c4895074e91467d7b0581ec5938c49563275fe7d9"
+}

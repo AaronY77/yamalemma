@@ -166,8 +166,8 @@ def ingest_source(worker, path, origin=None, informal=None, benchmark_commit=Non
         item = {
             'schema_version': 1, 'id': name, 'origin': origin or str(path.resolve()),
             'benchmark_commit': benchmark_commit, 'snapshot_kind': 'supplied-source',
-            'source_sha256': hashlib.sha256(original).hexdigest(), 'raw_source': source,
-            'transformed_source_sha256': hashlib.sha256(raw).hexdigest() if substituted else None,
+            'source_sha256': hashlib.sha256(raw).hexdigest(), 'raw_source': source,
+            'original_source_sha256': hashlib.sha256(original).hexdigest() if substituted else None,
             'source_transformations': substituted,
             'span': {'start_byte': declaration['start'], 'end_byte': declaration['end']},
             'declaration_source': source_slice(raw, declaration),

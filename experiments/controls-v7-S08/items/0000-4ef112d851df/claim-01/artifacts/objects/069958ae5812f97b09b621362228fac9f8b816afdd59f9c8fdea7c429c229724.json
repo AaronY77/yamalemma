@@ -1,0 +1,52 @@
+{
+  "claim_fingerprint": "d891b0fe0317ac4dc5c9b7b828e9444b973244991ddbf1e34611701332c84776",
+  "item_fingerprint": "3c4f992625fa5d2234b66442a8cee29223315b02d6ca4d64df744053554d0752",
+  "polarity": "confirm",
+  "expected": "open Set Function Filter Topology Polynomial Real in\n∃ (T : Set ℝ) (S : ℝ → ℕ → ℝ) (g : ℝ → ℝ); take T = {0}, S = fun _ n => (n : ℝ), and g = fun _ => 0, (∀ x ∈ T, (∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n(∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T) ∧ ¬ (∀ x ∈ T, (∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n((∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T))",
+  "probe": {
+    "schema_version": 1,
+    "claim_fingerprint": "d891b0fe0317ac4dc5c9b7b828e9444b973244991ddbf1e34611701332c84776",
+    "item_fingerprint": "3c4f992625fa5d2234b66442a8cee29223315b02d6ca4d64df744053554d0752",
+    "polarity": "confirm",
+    "template": "proposition-v1",
+    "expected": "open Set Function Filter Topology Polynomial Real in\n∃ (T : Set ℝ) (S : ℝ → ℕ → ℝ) (g : ℝ → ℝ); take T = {0}, S = fun _ n => (n : ℝ), and g = fun _ => 0, (∀ x ∈ T, (∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n(∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T) ∧ ¬ (∀ x ∈ T, (∃ L : ℝ, Tendsto (S x) atTop (𝓝 L)) ∧\n((∀ x ∈ T, Tendsto (S x) atTop (𝓝 (g x))) → ContinuousOn g T))",
+    "proof": "by\n  have hn : ∀ L : ℝ, ¬ Tendsto (fun (n : ℕ) => (n : ℝ)) atTop (𝓝 L) := by\n    intro L h\n    have h₁ : ∀ᶠ n : ℕ in atTop, L + 1 ≤ (n : ℝ) :=\n      tendsto_natCast_atTop_atTop.eventually (eventually_ge_atTop (L + 1))\n    have h₂ : ∀ᶠ n : ℕ in atTop, (n : ℝ) < L + 1 :=\n      h.eventually (eventually_lt_nhds (lt_add_one L))\n    obtain ⟨n, h₁n, h₂n⟩ := (h₁.and h₂).exists\n    exact (not_lt_of_ge h₁n) h₂n\n  refine ⟨{0}, (fun _ n => (n : ℝ)), (fun _ => 0), ?_⟩\n  constructor\n  · intro _\n    exact continuousOn_const\n  · intro h\n    obtain ⟨L, hL⟩ := (h 0 (by simp)).1\n    exact hn L hL"
+  },
+  "environment": {
+    "lean-toolchain": "ead308ab4fc749eb2389819903fd7baa11bf06e490827f6896a8cbfe622fa703",
+    "lakefile.toml": "d832460e9ad6316bc5ab3c5ed7da3f725ad6c53833d7ddb73d004446023f8239",
+    "lake-manifest.json": "c7080a3938b536b821c383201a984d3fe5ff32461f0d9e4e4160ecc9739d9833",
+    "Yamalemma/Worker.lean": "103da5486fe5ee50ef8c68c474d88db05c161a48918b450667992e93d2002449",
+    "policy": "kernel-type-and-axioms-v1",
+    "toolchain": "leanprover/lean4:v4.35.0",
+    "implementation": {
+      "harness.py": "062ab1e10dffaa2bfee166be69c60875ca9a5e7673baff571ed262a2c9ececc0",
+      "worker.py": "41d257a82fffdbdd24c517589ad73ae6bc2f7bac8b4c943ce07f5d499241f718",
+      "ingest.py": "afb6af91e58dc35192083ac3706d578a3e3765c5a0daf10c9bba179f0efe06e8",
+      "domain.py": "643e19c7901c95e14d722ef91708bbae1fad762be16ab7e55587b056ec536abb",
+      "axiom_policy.py": "e3fbbeac5a6adf38e22654720d405f1dd312d033ea69f61910833715beccc0c1",
+      "adjudicate.py": "cf1840c7de0fa32088130d01ba81fb72c2ab90ad975ba62128280a785fa724ef",
+      "templates.py": "c7fca2269d340a11004443121fb833d56f423c82d72146564c3624692442b5bb",
+      "precheck.py": "dbe37a3507496769fab44c6f7ad4853c44397f6d1827e39a1b14c006a4c32a86",
+      "report.py": "9ff729c9c182e28ac4249ac0477599138f8e7c93bfdcd8f1667711fd8e752394",
+      "storage.py": "c78fb13bb2a4a864916afdd28298f78701c44e13b82de1aedfcbb4b9dc9849b7",
+      "proof_syntax.json": "8c24e7dc856124a2b5794235768c331a10eb7fdb1b95e2d42fba02f8498a31e1"
+    },
+    "fingerprint": "57a48d2a3ecea56d48365c16866166619348ec5cc1bb7017f1eec92ef6b0df8b"
+  },
+  "scope": "source-bound formal probe; interpretation pending",
+  "accepted": false,
+  "type_matches": false,
+  "axiom_policy": "unreadable",
+  "proof_opens": [
+    "open Set Function Filter Topology Polynomial Real"
+  ],
+  "attempt": {
+    "status": "failure",
+    "error": "<input>:2:41: expected ','",
+    "elapsed_seconds": 0.0023067680012900382,
+    "worker_generation": 1
+  },
+  "reason": "<input>:2:41: expected ','",
+  "id": "b42615e2f3de955d34dedef89fd5d3db8bf6a7bb6b28d6a371f815315d9a0569"
+}

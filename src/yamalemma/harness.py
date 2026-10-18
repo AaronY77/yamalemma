@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 
 from yamalemma.axiom_policy import assess_axioms
+from yamalemma.ingest import wrap
 from yamalemma.domain import file_hash, fingerprint, make_probe, validate_claim
 
 
@@ -36,6 +37,16 @@ def validate_item(item, project):
         raise ValueError('source item environment differs from the verification environment')
 
 
+def render_target(worker, item, proposition):
+    if BLOCKED.search(proposition):
+        return {'status': 'policy_rejected', 'error': 'unsupported executable syntax in target'}
+    allowed = json.loads((Path(__file__).parent / 'proof_syntax.json').read_text())
+    context = item.get('context', {})
+    return worker.request({'action': 'render', 'expected': proposition, 'allowed_syntax': allowed,
+                           'context': context.get('declarations', []), 'namespace': context.get('namespace', ''),
+                           'scopes': context.get('scopes', [])})
+
+
 def check_probe(worker, item, claim, probe, store=None):
     validate_claim(claim)
     validate_item(item, worker.project)
@@ -60,7 +71,9 @@ def check_probe(worker, item, claim, probe, store=None):
         response = {'status': 'policy_rejected', 'error': 'unsupported executable syntax in proof slot'}
     else:
         allowed = json.loads((Path(__file__).parent / 'proof_syntax.json').read_text())
-        response = worker.request({'action': 'check', 'expected': probe['expected'], 'proof': probe['proof'],
+        opens = [] if probe['proof'].lstrip().startswith('@(') else context.get('opens', [])
+        result['proof_opens'] = opens
+        response = worker.request({'action': 'check', 'expected': probe['expected'], 'proof': wrap(probe['proof'], opens),
                                    'allowed_syntax': allowed, 'context': supports, 'namespace': context.get('namespace', ''),
                                    'scopes': context.get('scopes', [])})
     result['attempt'] = response
