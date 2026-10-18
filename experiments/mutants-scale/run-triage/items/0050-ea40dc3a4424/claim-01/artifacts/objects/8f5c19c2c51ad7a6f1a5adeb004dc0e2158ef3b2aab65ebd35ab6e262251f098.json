@@ -1,0 +1,50 @@
+{
+  "claim_fingerprint": "ea0fd1fbda13a65ffde795a11c87bac6771660130303d773144193c7bc5fe200",
+  "item_fingerprint": "64f3dc19dd18cb0f7f8f2e09e5d4444d32ef7ee11682afb3136403711a055232",
+  "polarity": "confirm",
+  "expected": "Not (∀ (a : ℕ → ℤ)\n(abase : a 0 = 1 ∧ a 1 = 2)\n(arec : ∀ n ≥ 2, a n = 4 * a (n - 1) - a (n - 2)), Odd putnam_2015_a2_solution ∧ putnam_2015_a2_solution.Prime ∧ ((putnam_2015_a2_solution : ℤ) ∣ a 2015))",
+  "probe": {
+    "schema_version": 1,
+    "claim_fingerprint": "ea0fd1fbda13a65ffde795a11c87bac6771660130303d773144193c7bc5fe200",
+    "item_fingerprint": "64f3dc19dd18cb0f7f8f2e09e5d4444d32ef7ee11682afb3136403711a055232",
+    "polarity": "confirm",
+    "template": "proposition-v1",
+    "expected": "Not (∀ (a : ℕ → ℤ)\n(abase : a 0 = 1 ∧ a 1 = 2)\n(arec : ∀ n ≥ 2, a n = 4 * a (n - 1) - a (n - 2)), Odd putnam_2015_a2_solution ∧ putnam_2015_a2_solution.Prime ∧ ((putnam_2015_a2_solution : ℤ) ∣ a 2015))",
+    "proof": "by\n  intro h\n  let p : ℕ → ℤ × ℤ := fun n => Nat.rec (1, 2) (fun _ x => (x.2, 4 * x.2 - x.1)) n\n  let a : ℕ → ℤ := fun n => (p n).1\n  have hp (n : ℕ) : p (n + 1) = ((p n).2, 4 * (p n).2 - (p n).1) := by simp [p]\n  have hs (n : ℕ) : a (n + 1) = (p n).2 := by simp [a, hp]\n  have hr (n : ℕ) : a (n + 2) = 4 * a (n + 1) - a n := by\n    have ht : a (n + 2) = (p (n + 1)).2 := by simpa [Nat.add_assoc] using hs (n + 1)\n    rw [ht, hp, hs]\n    rfl\n  have hab : a 0 = 1 ∧ a 1 = 2 := by constructor <;> norm_num [a, p]\n  have hre : ∀ n ≥ 2, a n = 4 * a (n - 1) - a (n - 2) := by\n    intro n hn\n    have h₂ : n - 2 + 2 = n := by omega\n    have h₁ : n - 2 + 1 = n - 1 := by omega\n    simpa only [h₂, h₁] using hr (n - 2)\n  have ho : Odd putnam_2015_a2_solution := (h a hab hre).1\n  exact (show ¬ Odd putnam_2015_a2_solution by decide) ho"
+  },
+  "environment": {
+    "lean-toolchain": "7bc3447cbd72d5618fae8359a8f2eb94d86b4ad25dde7ce79df2a283247262e3",
+    "lakefile.toml": "10f650a58ad56ff3990fdd550aff40d7642cab4bbf037ad85324d5f1a3e7bec8",
+    "lake-manifest.json": "89a4a712c54fa01c2fe84d7e55f61c266c538248b93ca9a95a19885799601d29",
+    "Yamalemma/Worker.lean": "103da5486fe5ee50ef8c68c474d88db05c161a48918b450667992e93d2002449",
+    "policy": "kernel-type-and-axioms-v1",
+    "toolchain": "leanprover/lean4:v4.33.1",
+    "implementation": {
+      "harness.py": "be6c6a7f78e94d2b8573c0f5f3ef03c2320c1def68d27dec0150ecefffa9af65",
+      "worker.py": "41d257a82fffdbdd24c517589ad73ae6bc2f7bac8b4c943ce07f5d499241f718",
+      "ingest.py": "afb6af91e58dc35192083ac3706d578a3e3765c5a0daf10c9bba179f0efe06e8",
+      "domain.py": "643e19c7901c95e14d722ef91708bbae1fad762be16ab7e55587b056ec536abb",
+      "axiom_policy.py": "e3fbbeac5a6adf38e22654720d405f1dd312d033ea69f61910833715beccc0c1",
+      "adjudicate.py": "cf1840c7de0fa32088130d01ba81fb72c2ab90ad975ba62128280a785fa724ef",
+      "templates.py": "c7fca2269d340a11004443121fb833d56f423c82d72146564c3624692442b5bb",
+      "precheck.py": "dbe37a3507496769fab44c6f7ad4853c44397f6d1827e39a1b14c006a4c32a86",
+      "report.py": "9ff729c9c182e28ac4249ac0477599138f8e7c93bfdcd8f1667711fd8e752394",
+      "storage.py": "c78fb13bb2a4a864916afdd28298f78701c44e13b82de1aedfcbb4b9dc9849b7",
+      "proof_syntax.json": "784c384970f940ae9b506b385107aa1432d6e0c707604c70fc74310a2c3e9bfb"
+    },
+    "fingerprint": "5e2c48888b4507bbe13276838167d0b3566a82a7cd7faed4eb484b3c3be56859"
+  },
+  "scope": "source-bound formal probe; interpretation pending",
+  "accepted": false,
+  "type_matches": false,
+  "axiom_policy": "unreadable",
+  "proof_opens": [],
+  "attempt": {
+    "status": "failure",
+    "error": "probe.lean:1:459: error: No goals to be solved\n",
+    "elapsed_seconds": 0.21424540199222974,
+    "worker_generation": 1
+  },
+  "reason": "probe.lean:1:459: error: No goals to be solved\n",
+  "id": "d58b049c12cf14337610992d6e7fed71480520948c3e4139ec494b9085d86c81"
+}
