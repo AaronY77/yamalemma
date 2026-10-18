@@ -7,6 +7,8 @@ import signal
 import subprocess
 import time
 
+from yamalemma.worker import lake_path
+
 RunStatus = Literal["success", "failure", "timeout", "launch_error"]
 
 
@@ -25,13 +27,12 @@ def run_lean(
     fixture: Path,
     timeout_seconds: float = 180.0,
 ) -> LeanRunResult:
-    """Run a trusted Lean fixture inside our Ubuntu environment."""
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be finite and positive")
 
     lean_project = lean_project.resolve()
     fixture = (lean_project / fixture).resolve()
-    command = ("lake", "env", "lean", str(fixture))
+    command = (lake_path(), "env", "lean", str(fixture))
     started = time.monotonic()
 
     try:
