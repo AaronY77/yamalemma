@@ -1,5 +1,4 @@
 from pathlib import Path
-import hashlib
 
 from yamalemma.adjudicate import adjudicate
 from yamalemma.domain import fingerprint, make_claim, make_probe, save_json
@@ -45,7 +44,7 @@ def run_demo(worker, root, output):
         item = items[theorem]
         item['development_case'] = case_id
         item['benchmark_reference'] = 'historical blind-audit snapshot (not distributed)'
-        item['benchmark_reference_sha256'] = hashlib.sha256((root / item['benchmark_reference']).read_bytes()).hexdigest()
+        item['benchmark_reference_sha256'] = 'de723602caa8129d60a6ab8c6077efb43886c75f45020a47421166ecf9ce5a26'
         adaptations = {
             'S08': 'abstract the conclusion; omit the original recurrence and domain hypotheses',
             'S09': 'substitute the recorded answer {n : Nat | 0 < n} for the benchmark answer placeholder',

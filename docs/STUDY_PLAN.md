@@ -81,7 +81,3 @@ uv run yamalemma evaluate experiments/heldout-items-answers.json --lean-project 
 ```
 
 Run one evaluation at a time. Then collect independent judgments of each emitted claim and score each arm with `score --judgments`, as described in EVALUATION.md. Unlabeled items in the dataset are excluded from accuracy denominators by the scorer.
-
-## 6. Checkpoint (step 7)
-
-Suggested scope: the uncommitted implementation since `4424537`, the intake and selection modules, `lean-putnambench/` configuration and generated `lake-manifest.json`, study profiles, this plan, and the selection record. Keep `.yamalemma/` run outputs and `.lake/` out of Git as now. No remote is configured and nothing is pushed.
